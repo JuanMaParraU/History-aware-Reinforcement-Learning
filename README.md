@@ -1,7 +1,7 @@
 # History-aware-Reinforcement-Learning
-# ABS SAS
+## ABS SAS
 
-Mobile communications case study using autonomous [airborne base stations](https://ieeexplore.ieee.org/abstract/document/9448192). The system uses Q-Learning for positioning the simulated drones while maximising the covered end users.
+Mobile communications case study using autonomous [airborne base stations](https://ieeexplore.ieee.org/abstract/document/9448192). The system uses RL for positioning the simulated drones while maximising the covered end users.
 
 ##User Guide for linux/osx command line 
 
@@ -44,7 +44,7 @@ conda install -c pytorch pytorch
 ```python 
 conda install -c conda-forge matplotlib 
 ```
-9. Install paho-mqtt
+9. Install paho-mqtt. Check docmuentation about MQTT [here](https://www.eclipse.org/paho/index.php?page=clients/python/docs/index.php)
 ```python 
 conda install -c conda-forge paho-mqtt
 ```
