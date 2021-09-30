@@ -1,5 +1,4 @@
-# History-aware-Reinforcement-Learning
-# ABS SAS
+# ABS SAS QLearning
 
 Mobile communications case study using autonomous [airborne base stations](https://ieeexplore.ieee.org/abstract/document/9448192). The system uses Q-Learning for positioning the simulated drones while maximising the covered end users.
 
