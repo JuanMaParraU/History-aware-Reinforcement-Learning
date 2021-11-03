@@ -181,7 +181,7 @@ def on_message(client, userdata, msg):
     message = msg.payload
     print(msg.topic+" "+str(msg.payload))
     
-def save_initial_settings_mqtt(U_p, D_p, userPos_XY, name = args.database_name, topic_name ='initial_setting.json', host='localhost', port=1883):
+def save_initial_settings_mqtt(U_p, D_p, userPos_XY, name = args.database_name, topic_name ='initial_setting.json', host='broker.hivemq.com', port=1883):
     mqttClient=mqtt.Client()
     mqttClient.on_connect = on_connect
     mqttClient.connect(host, port)
@@ -209,7 +209,7 @@ def save_initial_settings_mqtt(U_p, D_p, userPos_XY, name = args.database_name, 
     userPos_XY = str(userPos_XY).replace("\'","\"")
     mqttClient.publish("users_pos_ini", str(userPos_XY))
 
-def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, reward, dronePos, episode, step, drone, topic_name = 'Q_table_collection.json', host='localhost', port=1883):
+def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, reward, dronePos, episode, step, drone, topic_name = 'Q_table_collection.json', host='broker.hivemq.com', port=1883):
     mqttClient=mqtt.Client()
     mqttClient.on_connect = on_connect
     mqttClient.on_message = on_message
@@ -292,7 +292,7 @@ def main(args):
     mqttClient=mqtt.Client()
     mqttClient.on_connect = on_connect
     mqttClient.on_message = on_message
-    mqttClient.connect('localhost', 1883)
+    mqttClient.connect('broker.hivemq.com', 1883)
     mqttClient.loop_start()
     mqttClient.subscribe("test")
     for i in range(args.episode):        
