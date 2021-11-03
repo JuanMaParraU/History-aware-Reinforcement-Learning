@@ -23,7 +23,7 @@ import copy
 from random import sample
 import paho.mqtt.client as mqtt
 from paho.mqtt.subscribe import _on_connect
-import json
+import sys, json
 
 parser = argparse.ArgumentParser(description='Reinforce Learning')
 #=======================================================================================================================
@@ -178,7 +178,7 @@ def on_message(client, userdata, msg):
     global isMessageReceived 
     isMessageReceived = True
     global message 
-    message = msg.payload
+    message = str(msg.payload)
     print(msg.topic+" "+str(msg.payload))
     
 def save_initial_settings_mqtt(U_p, D_p, userPos_XY, name = args.database_name, topic_name ='initial_setting.json', host='broker.hivemq.com', port=1883):
@@ -265,6 +265,8 @@ def grasp_data_for_training(Store_transition, count, numbers = 1):
 def main(args):
     # ========================================== start up eval net =====================================================
     global isMessageReceived
+    global message
+    DroneDict = {}
     eval_network = []
     param_eval = []
     optimizer_eval = []
@@ -294,7 +296,7 @@ def main(args):
     mqttClient.on_message = on_message
     mqttClient.connect('broker.hivemq.com', 1883)
     mqttClient.loop_start()
-    mqttClient.subscribe("test")
+    mqttClient.subscribe("stopping_criteria_cep")
     for i in range(args.episode):        
         dronePos, userPos = environment_setup(i)
         count = 0
@@ -346,9 +348,15 @@ def main(args):
                 optimizer_eval[drone_No].step()  # 原来是optimizer_target
                 print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(i + 1, args.episode, j + 1, args.step, loss.item()))
                 torch.save(eval_network[drone_No].state_dict(), 'Network Parameters\\' + str(count) + 'th_eval_network_parameters')
-                if isMessageReceived:
-                    print('Message is received')
-                    DroneDict = json.loads(message)
+                if isMessageReceived and 'Pause_Drone' in message:
+                    message = str(message).replace("b","")
+                    print('Message is received'+ message)
+                    try:
+                        dataform = str(message).strip("'<>() ").replace('\'','\"')
+                        DroneDict = json.loads(dataform)
+                    except:
+                        print(repr(message))
+                        print(sys.exc_info())
                     if DroneDict['Pause_Drone'][str(drone_No)] == False:
                         target_network[drone_No].load_state_dict(torch.load('Network Parameters\\' + str(count) + 'th_eval_network_parameters'))
                         print('Drone' + str(drone_No) + ' updated')
