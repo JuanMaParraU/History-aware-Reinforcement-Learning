@@ -3,13 +3,13 @@ import math
 import json
 from json import JSONEncoder
 import torch
-import pymongo
+#import pymongo
 import argparse
 import random
 import models
 from models import Q_Learning
 import pandas as pd
-from pymongo import MongoClient
+#from pymongo import MongoClient
 from pandas import DataFrame,Series
 import matplotlib.pyplot as plt, time
 from matplotlib.patches import Circle
@@ -163,7 +163,7 @@ def environment_setup():
 def on_connect(client, userdata, flags, rc):
     print('CONNACK received with code %d.' % (rc))
     
-def save_initial_settings_mqtt(U_p, D_p, userPos_XY, name = args.database_name, topic_name ='initial_setting.json', host='localhost', port=1883):
+def save_initial_settings_mqtt(U_p, D_p, userPos_XY, name = args.database_name, topic_name ='initial_setting.json', host='broker.hivemq.com', port=1883):
     mqttClient=mqtt.Client()
     mqttClient.on_connect = on_connect
     mqttClient.connect(host, port)
@@ -191,7 +191,7 @@ def save_initial_settings_mqtt(U_p, D_p, userPos_XY, name = args.database_name, 
     userPos_XY = str(userPos_XY).replace("\'","\"")
     mqttClient.publish("users_pos_ini", str(userPos_XY))
 
-def save_Q_table_mqtt(table, SINR, initial_real_reword, action, dronePos, episode, step, drone, topic_name = 'Q_table_collection.json', host='localhost', port=1883):
+def save_Q_table_mqtt(table, SINR, initial_real_reword, action, dronePos, episode, step, drone, topic_name = 'Q_table_collection.json', host='broker.hivemq.com', port=1883):
     mqttClient=mqtt.Client()
     mqttClient.on_connect = on_connect
     mqttClient.connect(host, port)
