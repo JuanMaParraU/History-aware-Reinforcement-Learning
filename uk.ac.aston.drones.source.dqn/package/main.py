@@ -7,14 +7,14 @@ import torch.nn.functional as F
 import torch.optim as optim
 import config as cf
 import math
-import pymongo
+#import pymongo
 import argparse
 import random
 import models
 from models import SARSA
 from models import Deep_Q_Network, net
 import pandas as pd
-from pymongo import MongoClient
+#from pymongo import MongoClient
 from pandas import DataFrame,Series
 import matplotlib.pyplot as plt, time
 from matplotlib.patches import Circle
