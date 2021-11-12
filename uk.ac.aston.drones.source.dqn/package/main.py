@@ -23,8 +23,8 @@ import copy
 from random import sample
 import json
 import os
-os.environ["CUDA_DEVICES_ORDER"]="PCI_BUS_IS"
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+#os.environ["CUDA_DEVICES_ORDER"]="PCI_BUS_IS"
+#os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 filename = "dict.json"
 
@@ -441,12 +441,12 @@ def main(args):
             if j%20 ==0:
                 print('episode', i,' with average reward:', total/counter)
                 for drone_No in range(args.numDrones):
-                    print('episode', str(drone_No),' with average reward:', dtotal[drone_No]/counter)
+                    print('episode', str(drone_No),'drone' + str(drone_No) + ' with average reward:', dtotal[drone_No]/counter)
         counts += [total / counter]
         for drone_No in range(args.numDrones):
             dcounts[drone_No] += [dtotal[drone_No] / counter]
             np.save('drone' + str(drone_No) +'_episode_' + str(i) + '.npy', dcounts[drone_No])
-            print('drone' + str(drone_No) + 'rewards:', dcounts[drone_No])
+            print('drone' + str(drone_No) + ' rewards:', dcounts[drone_No])
         print('All episodes rewards:', counts)
         np.save('reward' + '_episode_' + str(i) + '.npy', counts)
 if __name__ == "__main__":
