@@ -21,12 +21,8 @@ from matplotlib.patches import Circle
 import pickle
 import copy
 from random import sample
-import json
-import os
-#os.environ["CUDA_DEVICES_ORDER"]="PCI_BUS_IS"
-#os.environ["CUDA_VISIBLE_DEVICES"]="1"
-
-filename = "dict.json"
+import paho.mqtt.client as mqtt
+from paho.mqtt.subscribe import _on_connect
 
 parser = argparse.ArgumentParser(description='Reinforce Learning')
 #=======================================================================================================================
@@ -37,18 +33,18 @@ parser.add_argument('--numUsers', default=1050, type=int, help='The number of Us
 parser.add_argument('--length', default=100, type=int, help='The length of the area(meter)')
 parser.add_argument('--width', default=100, type=int, help='The width of the area(meter)')
 parser.add_argument('--resolution', default=10, type=int, help='The Resolution (meter) for drones')
-parser.add_argument('--episode', default=100, type=int, help='The number turns it plays')
+parser.add_argument('--episode', default=10, type=int, help='The number turns it plays')
 parser.add_argument('--step', default=2000, type=int, help='The number of steps for any turn of runs')
 parser.add_argument('--round', default=100, type=int, help='The number of rounds per training')
 parser.add_argument('--interval', default=200, type=int, help='The interval between each chunk of training rounds')
 parser.add_argument('--action_space', default=['east','west','south','north','stay'], type=list, help='The avaliable states')
 parser.add_argument('--EPSILON', default=0.9, type=float, help='The greedy policy')
-parser.add_argument('--ALPHA', default=0.1, type=float, help='The learning rate')
-parser.add_argument('--LAMBDA', default=0.5, type=float, help='The discount factor')
+parser.add_argument('--ALPHA', default=0.3, type=float, help='The learning rate')
+parser.add_argument('--LAMBDA', default=0.9, type=float, help='The discount factor')
 parser.add_argument('--store_step', default=100, type=int, help='number of steps per storation, store the data from target network')
 #=======================================================================================================================
 # DQN Parameters
-parser.add_argument('--lr', default=0.01, type=float, help='The learning rate for CNN')
+parser.add_argument('--lr', default=0.005, type=float, help='The learning rate for CNN')
 parser.add_argument('--drop_rate', default=0.5, type=float, help='The drop out rate for CNN')
 parser.add_argument('--iteration', default=1, type=int, help='The number of data per train')
 parser.add_argument('--sequence_len', default=10, type=int, help='The number of observations in a sequence')
@@ -65,8 +61,9 @@ parser.add_argument('--SIGMA', default=20, type=int, help='The SIGMA')
 # Database Parameters
 parser.add_argument('--database_name', default='DQN_Data_Base', type=str, help='The name of database')
 parser.add_argument('--collection_name', default='Q_table_collection', type=str, help='The name of the collection')
-parser.add_argument('--host', default='localhost', type=str, help='The host type')
-parser.add_argument('--mongodb_port', default=27017, type=int, help='The port of database')
+parser.add_argument('--host', default='127.0.0.1', type=str, help='The host type')
+parser.add_argument('--mongodb_port', default=5939, type=int, help='The port of database')
+
 
 args = parser.parse_args()
 sarsa = SARSA(args)
@@ -76,12 +73,9 @@ DQN = Deep_Q_Network(args)
 def generate_pre_Q_dict_from_array(array):
     dict = {}
     for i in range(np.shape(array)[0]):
-        data = '( '
+        data = 0.0
         for j in range(np.shape(array)[1]):
-            if j != 0:
-                data += ', '
-            data += str(array[i,j])
-        data += ' )'
+            data = array[i,j]
         dict [str(args.action_space[i])] = data
     return copy.deepcopy(dict)
 
@@ -235,10 +229,13 @@ def environment_setup(i):
             userPos = np.concatenate((userPos, cluster[dict]), axis=0)
     userPos[:, 2] = 1.5
     #save_initial_settling(userPos,dronePos)
+    save_initial_settings_mqtt(userPos, dronePos)
     return dronePos, userPos, distribution, u
 
-
-def refreash_dataset(name = args.database_name, collection_name = args.collection_name, host='localhost', port=27017):
+def on_connect(client, userdata, flags, rc):
+    print('CONNACK received with code %d.' % (rc))
+    
+def refreash_dataset(name = args.database_name, collection_name = args.collection_name, host='127.0.0.1', port=27017):
     mongo_client = MongoClient(host, port) # 创建 MongoClient 对象，（string格式，int格式）
     mongo_db = mongo_client[name] # MongoDB 中可存在多个数据库，根据数据库名称获取数据库对象（Database）
     #mongo_db.authenticate(mongodb_user, mongodb_passwd) # 登录认证
@@ -250,8 +247,8 @@ def refreash_dataset(name = args.database_name, collection_name = args.collectio
         #drop = db_collection.drop()
 
 
-def save_initial_settling(U_p, D_p, name = args.database_name, collection_name ='initial_setting', host='localhost', port=27017):
-    myclient = pymongo.MongoClient(host='localhost', port=27017)
+def save_initial_settings(U_p, D_p, name = args.database_name, collection_name ='initial_setting', host='127.0.0.1', port=27017):
+    myclient = pymongo.MongoClient(host='127.0.0.1', port=27017)
     mydb = myclient[name]
     dblist = myclient.list_database_names()
     collection = mydb[collection_name]
@@ -277,14 +274,40 @@ def save_initial_settling(U_p, D_p, name = args.database_name, collection_name =
     initial_info ['episodes'] = 'total if possible'
     result = collection.insert(initial_info)
 
+def save_initial_settings_mqtt(U_p, D_p, name = args.database_name, topic_name ='initial_setting.json', host='127.0.0.1', port=5939):
+    mqttClient=mqtt.Client()
+    mqttClient.on_connect = on_connect
+    mqttClient.connect(host, port)
+    initial_info = {}
+    initial_info ['random_seed'] = args.random_seed
+    initial_info ['num_drones'] = args.numDrones
+    initial_info ['num_users'] = args.numUsers
+    initial_info ['user_positions'] = generate_dict_from_array(U_p, 'user')
+    initial_info ['drone_positions'] = generate_dict_from_array(D_p, 'drone')
+    initial_info ['carrier_frequency'] = args.fc
+    initial_info ['transmit_power'] = args.Pt
+    initial_info ['sinr_threshold'] = args.connectThresh
+    initial_info ['drone_user_capacity'] = 'not consider yet'
+    initial_info ['x_min'] = 0
+    initial_info ['x_max'] = args.width
+    initial_info ['y_min'] = 0
+    initial_info ['y_max'] = args.length
+    initial_info ['possible_actions'] = [[1,0],[-1,0],[0,1],[0,-1],[0,0]]
+    initial_info ['learning_rate'] = args.ALPHA
+    initial_info ['total_episodes'] = args.episode
+    initial_info ['iterations_per_episode'] = args.step
+    initial_info ['discount_factor'] = args.LAMBDA
+    initial_info ['episodes'] = 'total if possible'
+    mqttClient.publish(topic_name, str(initial_info))
+    
 def save_predicted_Q_table(observation_seq, SINR, predicted_table, action, reward_, dronePos, episode, step, drone, name , collection_name, host='localhost', port=27017):
-    myclient = pymongo.MongoClient(host='localhost', port=27017)
+    myclient = pymongo.MongoClient(host='127.0.0.1', port=27017)
     mydb = myclient[name]
     dblist = myclient.list_database_names()
     data = {}
     data['episode']=episode
     data['step'] = step
-    data['drone number']=drone
+    data['drone_number']=drone
     drone_dict = data ['qtable'] = {}
     drone_dict['position: (' + str(dronePos[int(drone),0])+', '+str(dronePos[int(drone),1])+')'] = {}
     drone_dict['position: (' + str(dronePos[int(drone),0])+', '+str(dronePos[int(drone),1])+')'] = generate_pre_Q_dict_from_array(predicted_table.T)
@@ -295,7 +318,23 @@ def save_predicted_Q_table(observation_seq, SINR, predicted_table, action, rewar
     collection = mydb[collection_name]
     result = collection.insert(data)
     #print(result)
-
+def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, reward, dronePos, episode, step, drone, topic_name = 'Q_table_collection.json', host='127.0.0.1', port=5939):
+    mqttClient=mqtt.Client()
+    mqttClient.on_connect = on_connect
+    mqttClient.connect(host, port)
+    data = {}
+    data['episode']=episode
+    data['step'] = step
+    data['drone_number']=drone
+    drone_dict = data ['qtable'] = {}
+    drone_dict['position: (' + str(dronePos[int(drone),0])+', '+str(dronePos[int(drone),1])+')'] = {}
+    drone_dict['position: (' + str(dronePos[int(drone),0])+', '+str(dronePos[int(drone),1])+')'] = generate_pre_Q_dict_from_array(predicted_table.T)
+    drone_dict['SINR'] = generate_dict_from_array( SINR, 'user')
+    drone_dict['state'] = generate_dict_from_array(dronePos, 'drone')
+    drone_dict['action'] = action
+    drone_dict['reward'] = reward
+    mqttClient.publish(topic_name, str(data))
+    
 def save_data_for_training(Store_transition, count, observation_seq_adjust, action_adjust, reward_, observation_seq_adjust_):
     Store_transition[count%args.store_step] = {}
     # Store_transition[count]['observation_seq'] = np.array([observation_seq_adjust])
@@ -318,7 +357,6 @@ def grasp_data_for_training(Store_transition, count, numbers = 1):
         r_ = Store[dict]['reward_']
         action = Store[dict]['action']
     return  state, r_, action, state_
-
 
 def main(args):
     # ========================================== start up eval net =====================================================
@@ -409,6 +447,7 @@ def main(args):
                 Store_transition[drone_No] = save_data_for_training(Store_transition[drone_No], count[drone_No], observation_seq, action_adjust, reward_['total'], observation_seq_)
                 count[drone_No] += 1
                 #save_predicted_Q_table(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, dronePos, i, j, drone_No, args.database_name, args.collection_name)
+                save_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, dronePos, i, j, drone_No)
                 re = []
                 for k in range(10):
                     state, r, action, state_ = grasp_data_for_training(Store_transition[drone_No], count[drone_No])
@@ -449,5 +488,7 @@ def main(args):
             print('drone' + str(drone_No) + ' rewards:', dcounts[drone_No])
         print('All episodes rewards:', counts)
         np.save('reward' + '_episode_' + str(i) + '.npy', counts)
+
 if __name__ == "__main__":
     main(args)
+
