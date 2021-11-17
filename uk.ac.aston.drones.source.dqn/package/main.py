@@ -180,11 +180,17 @@ def on_message(client, userdata, msg):
     global message 
     message = str(msg.payload)
     print(msg.topic+" "+str(msg.payload))
-    
-def save_initial_settings_mqtt(U_p, D_p, userPos_XY, name = args.database_name, topic_name ='initial_setting.json', host='broker.hivemq.com', port=1883):
-    mqttClient=mqtt.Client()
+
+def on_log(client, userdata, level, buf):
+    global log
+    log = buf
+
+def save_initial_settings_mqtt(U_p, D_p, userPos_XY, name = args.database_name, topic_name ='initial_setting.json', host='broker.mqttdashboard.com', port=1883):
+    mqttClient=mqtt.Client(client_id="JuanMaServer")
     mqttClient.on_connect = on_connect
-    mqttClient.connect(host, port)
+    mqttClient.on_log = on_log
+    mqttClient.connect_async(host, port)
+    mqttClient.loop_start()
     initial_info = {}
     initial_info ['random_seed'] = args.random_seed
     initial_info ['num_drones'] = args.numDrones
@@ -205,15 +211,19 @@ def save_initial_settings_mqtt(U_p, D_p, userPos_XY, name = args.database_name, 
     initial_info ['iterations_per_episode'] = args.step
     initial_info ['discount_factor'] = args.LAMBDA
     initial_info ['episodes'] = 'total if possible'
+    print('here')
     mqttClient.publish(topic_name, str(initial_info))
     userPos_XY = str(userPos_XY).replace("\'","\"")
-    mqttClient.publish("users_pos_ini", str(userPos_XY))
-
-def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, reward, dronePos, episode, step, drone, topic_name = 'Q_table_collection.json', host='broker.hivemq.com', port=1883):
-    mqttClient=mqtt.Client()
+    mqttClient.publish("users_pos_ini", str(userPos_XY),qos=1)
+    print('published')
+    mqttClient.loop_stop()
+def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, reward, dronePos, episode, step, drone, topic_name = 'Q_table_collection.json', host='broker.mqttdashboard.com', port=1883):
+    mqttClient=mqtt.Client(client_id="PublisherQTable")
     mqttClient.on_connect = on_connect
     mqttClient.on_message = on_message
-    mqttClient.connect(host, port)
+    mqttClient.on_log = on_log
+    mqttClient.connect_async(host, port)
+    mqttClient.loop_start()
     data = {}
     data['episode']=episode
     data['step'] = step
@@ -225,8 +235,8 @@ def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, 
     drone_dict['state'] = generate_dict_from_array(dronePos, 'drone')
     drone_dict['action'] = action
     drone_dict['reward'] = reward
-    mqttClient.publish(topic_name, str(data))
-    
+    mqttClient.publish(topic_name, str(data),qos=1)
+    mqttClient.loop_stop()
 def save_data_for_training(Store_transition, count, observation_seq_adjust, action_adjust, reward_, observation_seq_adjust_):
     Store_transition[count] = {}
     # Store_transition[count]['observation_seq'] = np.array([observation_seq_adjust])
@@ -294,7 +304,7 @@ def main(args):
     mqttClient=mqtt.Client()
     mqttClient.on_connect = on_connect
     mqttClient.on_message = on_message
-    mqttClient.connect('broker.hivemq.com', 1883)
+    mqttClient.connect('broker.mqttdashboard.com', 1883)
     mqttClient.loop_start()
     mqttClient.subscribe("stopping_criteria_cep")
     for i in range(args.episode):        
