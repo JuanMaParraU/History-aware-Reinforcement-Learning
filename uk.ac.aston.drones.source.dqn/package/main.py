@@ -325,7 +325,7 @@ def main(args):
                 observation_seq_adjust = (np.swapaxes(np.swapaxes(observation_seq,0,2),1,2)).astype(np.float32) # too meet the need of torch input
                 if cf.use_cuda:
                     action_reward = target_network[drone_No](torch.from_numpy(np.array([observation_seq_adjust])).cuda())
-                    action_reward = action_reward.cuda()
+                    action_reward = action_reward.cpu()
                 else:
                     action_reward = target_network[drone_No](torch.from_numpy(np.array([observation_seq_adjust])))
                 # ================================ greedy actions ======================================================
