@@ -25,6 +25,7 @@ import paho.mqtt.client as mqtt
 from paho.mqtt.subscribe import _on_connect
 import sys, json
 import os
+#from builtins import False
 #os.environ["CUDA_DEVICES_ORDER"]="PCI_BUS_IS"
 #os.environ["CUDA_VISIBLE_DEVICES"]="6"
 parser = argparse.ArgumentParser(description='Reinforce Learning')
@@ -66,7 +67,6 @@ parser.add_argument('--database_name', default='DQN_Data_Base', type=str, help='
 parser.add_argument('--collection_name', default='Q_table_collection', type=str, help='The name of the collection')
 parser.add_argument('--host', default='127.0.0.1', type=str, help='The host type')
 parser.add_argument('--mongodb_port', default=5939, type=int, help='The port of database')
-
 
 args = parser.parse_args()
 sarsa = SARSA(args)
@@ -338,6 +338,8 @@ def main(args):
     # ========================================== start up eval net =====================================================
     global isMessageReceived
     global message
+    global flagForStop
+    flagForStop = False
     DroneDict = {}
     eval_network = []
     param_eval = []
@@ -443,32 +445,24 @@ def main(args):
                 optimizer_eval[drone_No].zero_grad()  # 原来是optimizer_target
                 loss.backward(retain_graph=True)
                 optimizer_eval[drone_No].step()  # 原来是optimizer_target
-                #print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(i + 1, args.episode, j + 1, args.step, loss.item()))
+                print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(i + 1, args.episode, j + 1, args.step, loss.item()))
                 torch.save(eval_network[drone_No].state_dict(), 'Network Parameters\\' + str(drone_No) + 'th_eval_network_parameters')
-                if count[drone_No] % args.interval == 0 :
-                    if isMessageReceived and 'Pause_Drone' in message:
-                        message = str(message).replace("b","")
-                        print('Message is received'+ message)
-                        try:
-                            dataform = str(message).strip("'<>() ").replace('\'','\"')
-                            DroneDict = json.loads(dataform)
-                        except:
-                            print(repr(message))
-                            print(sys.exc_info())
-                        if DroneDict['Pause_Drone'][str(drone_No)] == False:
-                            target_network[drone_No].load_state_dict(torch.load('Network Parameters\\' + str(drone_No) + 'th_eval_network_parameters'))
-                            print('Drone' + str(drone_No) + ' updated')
-                        print ('Network Parameters\\' + str(count) + 'th_eval_network_parameters is successfully load to the target network')
-                    #nonlocal isMessageReceived
-                        isMessageReceived = not isMessageReceived
-                    #print(isMessageReceived)
-                #if count % args.interval == 0 or (count+1) % args.interval == 0 :           #此处要改
-                   # File = open(filename, 'r')
-                   # DroneDict = json.load(File)
-                   # if DroneDict['Pause_Drone'][str(drone_No)] == False:
-                    #    target_network[drone_No].load_state_dict(torch.load('Network Parameters\\' + str(count) + 'th_eval_network_parameters'))
-                    #    print('Drone' + str(drone_No) + ' update')
-                   # print ('Network Parameters\\' + str(count) + 'th_eval_network_parameters is successfully load to the target network')
+                if count[drone_No] % args.interval == 0 and flagForStop == False:
+                    target_network[drone_No].load_state_dict(torch.load('Network Parameters\\' + str(drone_No) + 'th_eval_network_parameters'))
+                    print('Drone' + str(drone_No) + ' updated')
+                    print ('Network Parameters\\' + str(count) + 'th_eval_network_parameters is successfully load to the target network')                    
+                if isMessageReceived and 'Pause_Drone' in message:
+                    message = str(message).replace("b","")
+                    print('Message is received'+ message)
+                    try:
+                        dataform = str(message).strip("'<>() ").replace('\'','\"')
+                        DroneDict = json.loads(dataform)
+                    except:
+                        print(repr(message))
+                        print(sys.exc_info())
+                    if DroneDict['Pause_Drone'][str(drone_No)] == True:
+                        flagForStop = True
+                    isMessageReceived = not isMessageReceived
             total += reward_['total']
             for drone_No in range(args.numDrones):
                 dtotal[drone_No] += reward_[str(drone_No)]
