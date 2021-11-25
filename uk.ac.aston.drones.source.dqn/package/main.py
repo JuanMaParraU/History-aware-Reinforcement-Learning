@@ -24,7 +24,10 @@ from random import sample
 import paho.mqtt.client as mqtt
 from paho.mqtt.subscribe import _on_connect
 import sys, json
-
+import os
+#from builtins import False
+#os.environ["CUDA_DEVICES_ORDER"]="PCI_BUS_IS"
+#os.environ["CUDA_VISIBLE_DEVICES"]="6"
 parser = argparse.ArgumentParser(description='Reinforce Learning')
 #=======================================================================================================================
 # Environment Parameters
@@ -45,7 +48,7 @@ parser.add_argument('--LAMBDA', default=0.9, type=float, help='The discount fact
 parser.add_argument('--store_step', default=100, type=int, help='number of steps per storation, store the data from target network')
 #=======================================================================================================================
 # DQN Parameters
-parser.add_argument('--lr', default=0.005, type=float, help='The learning rate for CNN')
+parser.add_argument('--lr', default=0.01, type=float, help='The learning rate for CNN')
 parser.add_argument('--drop_rate', default=0.5, type=float, help='The drop out rate for CNN')
 parser.add_argument('--iteration', default=1, type=int, help='The number of data per train')
 parser.add_argument('--sequence_len', default=10, type=int, help='The number of observations in a sequence')
@@ -64,7 +67,6 @@ parser.add_argument('--database_name', default='DQN_Data_Base', type=str, help='
 parser.add_argument('--collection_name', default='Q_table_collection', type=str, help='The name of the collection')
 parser.add_argument('--host', default='127.0.0.1', type=str, help='The host type')
 parser.add_argument('--mongodb_port', default=5939, type=int, help='The port of database')
-
 
 args = parser.parse_args()
 sarsa = SARSA(args)
@@ -91,21 +93,86 @@ def generate_dict_from_array(array, name):
         dict [name + ' ' + str(i)] = data
     return copy.deepcopy(dict)
 
+def environment(distribution, u):
+    np.random.seed(args.random_seed)
+    length = 100
+    cluster = {}
+    number = {}
+    colour = {}
+    SIGMA = {}
+    label = {}
+    # font = {'family': 'Palatino',}
+    font = {}
+    u['cluster1'][0] = (u['cluster1'][0] + random.randint(-15,15)) % length
+    u['cluster1'][1] = (u['cluster1'][1] + random.randint(-15,15)) % length
+    SIGMA['cluster1'] = 7
+    number['cluster1'] = 250
+    colour['cluster1'] = '#9400D3'
+    cluster['cluster1'] = np.zeros((number['cluster1'], 3))
+    cluster['cluster1'][:, 0:1] = np.floor(
+        (distribution['cluster1x'] * SIGMA['cluster1'] + u['cluster1'][0]) % length)
+    cluster['cluster1'][:, 1:2] = np.floor(
+        (distribution['cluster1y'] * SIGMA['cluster1'] + u['cluster1'][1]) % length)
+    label['cluster1'] = 'MS cluster 1'
+
+    u['cluster2'][0] = (u['cluster2'][0] + random.randint(-15,15)) % length
+    u['cluster2'][1] = (u['cluster2'][1] + random.randint(-15,15)) % length
+    SIGMA['cluster2'] = 10
+    number['cluster2'] = 300
+    colour['cluster2'] = '#FF8C00'
+    cluster['cluster2'] = np.zeros((number['cluster2'], 3))
+    cluster['cluster2'][:, 0:1] = np.floor(
+        (distribution['cluster2x'] * SIGMA['cluster2'] + u['cluster2'][0]) % length)
+    cluster['cluster2'][:, 1:2] = np.floor(
+        (distribution['cluster2y'] * SIGMA['cluster2'] + u['cluster2'][1]) % length)
+    label['cluster2'] = 'MS cluster 2'
+
+    #u['cluster3'][0] = (u['cluster3'][0] + random.randint(-15,15)) % length
+    #u['cluster3'][1] = (u['cluster3'][1] + random.randint(-15,15)) % length
+    SIGMA['cluster3'] = 6
+    number['cluster3'] = 200
+    colour['cluster3'] = '#228B22'
+    cluster['cluster3'] = np.zeros((number['cluster3'], 3))
+    cluster['cluster3'][:, 0:1] = np.floor(
+        (distribution['cluster3x'] * SIGMA['cluster3'] + u['cluster3'][0]) % length)
+    cluster['cluster3'][:, 1:2] = np.floor(
+        (distribution['cluster3y'] * SIGMA['cluster3'] + u['cluster3'][1]) % length)
+    label['cluster3'] = 'MS cluster 3'
+
+    number['uniform'] = 300
+    cluster['uniform'] = np.random.randint(0, 100, size=[number['uniform'], 3])
+    colour['uniform'] = '#4169E1'
+    label['uniform'] = 'MS uniform'
+
+    userPos = cluster['cluster1']
+    for dict in cluster:
+        if dict != 'cluster1':
+            userPos = np.concatenate((userPos, cluster[dict]), axis=0)
+    userPos[:, 2] = 1.5
+    #save_initial_settling(userPos,dronePos)
+    return userPos
+
 def environment_setup(i):
     np.random.seed(args.random_seed)
     u = np.random.randint(300,700)
     # dronePos = np.zeros((args.numDrones,3))
     # dronePos[:,0:2] = np.random.randint(0, int(args.length/args.resolution),[args.numDrones,2])*10+5
     # dronePos[:,2] = 30
-    #dronePos = np.array([[0, 0, 30], [99, 99, 30], [0, 99, 30], [99, 0, 30], [0, 49, 30], [49, 0, 30], [99, 49, 30], [49, 99, 30]])
-    dronePos = np.array([[5, 5, 30], [95, 95, 30]])
+    if args.numDrones == 2:
+        dronePos = np.array([[5, 5, 30], [95, 95, 30]])
+        #dronePos = np.array([[5, 5, 30], [5, 5, 30]])
+    elif args.numDrones == 4:
+        dronePos = np.array([[5, 5, 30], [95, 95, 30], [5, 95, 30], [95, 5, 30]])
+    elif args.numDrones == 8:
+        dronePos = np.array([[5, 5, 30], [95, 95, 30], [5, 95, 30], [95, 5, 30], [5, 50, 30], [50, 5, 30], [95, 50, 30], [50, 95, 30]])
+    #dronePos = np.array([[5, 5, 30], [95, 95, 30], [5, 95, 30], [95, 5, 30]])
 
-    # userPos = np.zeros((args.numUsers,3))
+    #userPos = np.zeros((args.numUsers,3))
     # userPos[:,0:2] =np.floor((np.random.randn(args.numUsers,2)*args.SIGMA*5 + u)%args.length)
     # userPos[:,2] = 1.5
     resolution = 10
     length = 100
-
+    distribution = {}
     cluster = {}
     number = {}
     colour = {}
@@ -119,10 +186,12 @@ def environment_setup(i):
     number['cluster1'] = 250
     colour['cluster1'] = '#9400D3'
     cluster['cluster1'] = np.zeros((number['cluster1'], 3))
+    distribution['cluster1x'] = np.random.randn(number['cluster1'], 1)
+    distribution['cluster1y'] = np.random.randn(number['cluster1'], 1)
     cluster['cluster1'][:, 0:1] = np.floor(
-        (np.random.randn(number['cluster1'], 1) * SIGMA['cluster1'] + u['cluster1'][0]) % length)
+        (distribution['cluster1x'] * SIGMA['cluster1'] + u['cluster1'][0]) % length)
     cluster['cluster1'][:, 1:2] = np.floor(
-        (np.random.randn(number['cluster1'], 1) * SIGMA['cluster1'] + u['cluster1'][1]) % length)
+        (distribution['cluster1y'] * SIGMA['cluster1'] + u['cluster1'][1]) % length)
     label['cluster1'] = 'MS cluster 1'
 
     u['cluster2'] = [np.random.randint(30, 80), np.random.randint(20, 70)]
@@ -130,10 +199,12 @@ def environment_setup(i):
     number['cluster2'] = 300
     colour['cluster2'] = '#FF8C00'
     cluster['cluster2'] = np.zeros((number['cluster2'], 3))
+    distribution['cluster2x'] = np.random.randn(number['cluster2'], 1)
+    distribution['cluster2y'] = np.random.randn(number['cluster2'], 1)
     cluster['cluster2'][:, 0:1] = np.floor(
-        (np.random.randn(number['cluster2'], 1) * SIGMA['cluster2'] + u['cluster2'][0]) % length)
+        (distribution['cluster2x'] * SIGMA['cluster2'] + u['cluster2'][0]) % length)
     cluster['cluster2'][:, 1:2] = np.floor(
-        (np.random.randn(number['cluster2'], 1) * SIGMA['cluster2'] + u['cluster2'][1]) % length)
+        (distribution['cluster2y'] * SIGMA['cluster2'] + u['cluster2'][1]) % length)
     label['cluster2'] = 'MS cluster 2'
 
     u['cluster3'] = [np.random.randint(10, 85), np.random.randint(10, 90)]
@@ -141,10 +212,12 @@ def environment_setup(i):
     number['cluster3'] = 200
     colour['cluster3'] = '#228B22'
     cluster['cluster3'] = np.zeros((number['cluster3'], 3))
+    distribution['cluster3x'] = np.random.randn(number['cluster3'], 1)
+    distribution['cluster3y'] = np.random.randn(number['cluster3'], 1)
     cluster['cluster3'][:, 0:1] = np.floor(
-        (np.random.randn(number['cluster3'], 1) * SIGMA['cluster3'] + u['cluster3'][0]) % length)
+        (distribution['cluster3x'] * SIGMA['cluster3'] + u['cluster3'][0]) % length)
     cluster['cluster3'][:, 1:2] = np.floor(
-        (np.random.randn(number['cluster3'], 1) * SIGMA['cluster3'] + u['cluster3'][1]) % length)
+        (distribution['cluster3y'] * SIGMA['cluster3'] + u['cluster3'][1]) % length)
     label['cluster3'] = 'MS cluster 3'
 
     number['uniform'] = 300
@@ -166,10 +239,10 @@ def environment_setup(i):
                 pos["x"]=str(user_x_y[i,j])
             else: 
                 if j == 1:
-                    pos["y"]=str(user_x_y[i,j])   
+                    pos["y"]=str(user_x_y[i,j])  
     #save_initial_settling(userPos,dronePos)
     save_initial_settings_mqtt(userPos, dronePos,userPos_XY)
-    return dronePos, userPos
+    return dronePos, userPos, distribution, u
 
 def on_connect(client, userdata, flags, rc):
     print('CONNACK received with code %d.' % (rc))
@@ -235,40 +308,29 @@ def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, 
     drone_dict['state'] = generate_dict_from_array(dronePos, 'drone')
     drone_dict['action'] = action
     drone_dict['reward'] = reward
-    mqttClient.publish(topic_name, str(data),qos=1)
+    mqttClient.publish(topic_name, str(data),qos=1)             #0
     mqttClient.loop_stop()
 def save_data_for_training(Store_transition, count, observation_seq_adjust, action_adjust, reward_, observation_seq_adjust_):
-    Store_transition[count] = {}
+    Store_transition[count%args.store_step] = {}
     # Store_transition[count]['observation_seq'] = np.array([observation_seq_adjust])
-    Store_transition[count]['observation_seq'] = np.array([observation_seq_adjust])
-    Store_transition[count]['action'] = action_adjust
-    Store_transition[count]['reward_'] = np.array([reward_])
-    Store_transition[count]['observation_seq_'] = np.array([observation_seq_adjust_])
-    if (count+1) % args.store_step == 0 and count != 0:
-        np.save('Data\\'+str(count - args.store_step + 1) + '_to_' + str(count) + '.npy', Store_transition)
-        Store_transition = {}
+    Store_transition[count%args.store_step]['observation_seq'] = observation_seq_adjust
+    Store_transition[count%args.store_step]['action'] = action_adjust
+    Store_transition[count%args.store_step]['reward_'] = reward_
+    Store_transition[count%args.store_step]['observation_seq_'] = observation_seq_adjust_
     # np.save('Data\\' + str(count - count%args.store_step ) + '_to_' + str(count - count%args.store_step + args.store_step - 1) + '.npy', Store_transition)
     return Store_transition
 
 def grasp_data_for_training(Store_transition, count, numbers = 1):
-    selected = sample([i for i in range(count)], numbers)
+    Store = Store_transition
+    if count<args.store_step:
+        selected = sample([i for i in range(count)], numbers)
+    else:
+        selected = sample([i for i in range(args.store_step)], numbers)
     for dict in selected:
-        if (count - (count)%args.store_step) <= dict :
-            Store = Store_transition
-        else:
-            Store = np.load('Data\\' + str(dict - dict%args.store_step ) + '_to_' + str(dict - dict%args.store_step + args.store_step - 1) + '.npy', allow_pickle = True).item()
-
-        if ('r_' not in dir()) or ('state_' not in dir()):
-            state = Store[dict]['observation_seq']
-            state_ = Store[dict]['observation_seq_']
-            r_ = Store[dict]['reward_']
-            action = Store[dict]['action']
-        else:
-            state = np.concatenate((state, Store[dict]['observation_seq']), axis=0)
-            state_ = np.concatenate((state_, Store[dict]['observation_seq_']), axis=0)
-            # state = Store[dict]['observation_seq']
-            r_ = np.concatenate((r_, Store[dict]['reward_']), axis=0)
-            action = Store[dict]['action']
+        state = Store[dict]['observation_seq']
+        state_ = Store[dict]['observation_seq_']
+        r_ = Store[dict]['reward_']
+        action = Store[dict]['action']
     return  state, r_, action, state_
 
 
@@ -276,6 +338,8 @@ def main(args):
     # ========================================== start up eval net =====================================================
     global isMessageReceived
     global message
+    global flagForStop
+    flagForStop = False
     DroneDict = {}
     eval_network = []
     param_eval = []
@@ -283,7 +347,9 @@ def main(args):
     param_target = []
     optimizer_target = []
     target_network = []
+    dcounts = []
     for i in range(args.numDrones):
+        dcounts.append([])
         eval_network.append(net(args))
         if cf.use_cuda:
             eval_network[i].cuda()
@@ -307,21 +373,43 @@ def main(args):
     mqttClient.connect('broker.mqttdashboard.com', 1883)
     mqttClient.loop_start()
     mqttClient.subscribe("stopping_criteria_cep")
+    dronePos, userPos, distribution, u = environment_setup(0)
     for i in range(args.episode):        
-        dronePos, userPos = environment_setup(i)
-        count = 0
         total = 0
+        dtotal = []
         counter = 0
-        Store_transition = {}
+        Store_transition = []
+        count = []
+        for drone_No in range(args.numDrones):
+            Store_transition.append({})
+            count.append(0)
+            dtotal.append(0)
+        for j in range(9):
+            for drone_No in range(args.numDrones):
+                allocVec, SINR, reward = models.alloc_users(userPos,dronePos,args.fc,args.dAngle,args.N0,args.BW,args.Pt,args.connectThresh)
+                observation_seq = DQN.observe(drone_No, allocVec['total'], dronePos, userPos)
+                observation_seq_adjust = (np.swapaxes(np.swapaxes(observation_seq,0,2),1,2)).astype(np.float32) # too meet the need of torch input
+                if cf.use_cuda:
+                    action_reward = target_network[drone_No](torch.from_numpy(np.array([observation_seq_adjust])).cuda())
+                    action_reward = action_reward.cpu()
+                else:
+                    action_reward = target_network[drone_No](torch.from_numpy(np.array([observation_seq_adjust])))
+            # ================================ greedy actions ======================================================
+                if random.random() < args.EPSILON:
+                    action_adjust = (torch.argmax(action_reward)).detach().numpy()
+                else:
+                    action_adjust = np.array(sample([i for i in range(len(args.action_space))], 1)[0])
+                # ================================= take actions =======================================================
+                dronePos[drone_No][:2] = DQN.take_action(dronePos[drone_No][:2], args.action_space[action_adjust])
+                allocVec_, SINR_, reward_ = models.alloc_users(userPos,dronePos,args.fc,args.dAngle,args.N0,args.BW,args.Pt,args.connectThresh)
+                observation_seq_ = DQN.observe(drone_No, allocVec_['total'], dronePos, userPos)
+                observation_seq_adjust_ = (np.swapaxes(np.swapaxes(observation_seq_,0,2),1,2)).astype(np.float32)                  
+                Store_transition[drone_No] = save_data_for_training(Store_transition[drone_No], count[drone_No], observation_seq, action_adjust, reward_['total'], observation_seq_)
+                count[drone_No] += 1
         for j in range(args.step):
             for drone_No in range(args.numDrones):
-                if i == 0 and j ==0:
-                    allocVec, SINR, reward = models.alloc_users(userPos,dronePos,args.fc,args.dAngle,args.N0,args.BW,args.Pt,args.connectThresh)
-                    observation_seq = DQN.observe(drone_No, allocVec['total'], dronePos, userPos)
-                    for k in range(args.sequence_len-1):
-                        observation_seq = np.concatenate((observation_seq, DQN.observe(drone_No, allocVec['total'], dronePos, userPos)), axis=2)
                 allocVec, SINR, reward = models.alloc_users(userPos,dronePos,args.fc,args.dAngle,args.N0,args.BW,args.Pt,args.connectThresh)
-                observation_seq = np.concatenate((observation_seq[: ,: ,3:30], DQN.observe(drone_No, allocVec['total'], dronePos, userPos)), axis=2)
+                observation_seq = DQN.observe(drone_No, allocVec['total'], dronePos, userPos)
                 observation_seq_adjust = (np.swapaxes(np.swapaxes(observation_seq,0,2),1,2)).astype(np.float32) # too meet the need of torch input
                 if cf.use_cuda:
                     action_reward = target_network[drone_No](torch.from_numpy(np.array([observation_seq_adjust])).cuda())
@@ -336,28 +424,33 @@ def main(args):
                 # ================================= take actions =======================================================
                 dronePos[drone_No][:2] = DQN.take_action(dronePos[drone_No][:2], args.action_space[action_adjust])
                 allocVec_, SINR_, reward_ = models.alloc_users(userPos,dronePos,args.fc,args.dAngle,args.N0,args.BW,args.Pt,args.connectThresh)
-                observation_seq_ = np.concatenate((observation_seq[: ,: ,3:30], DQN.observe(drone_No, allocVec_['total'], dronePos, userPos)), axis=2)
-                observation_seq_adjust_ = (np.swapaxes(np.swapaxes(observation_seq_,0,2),1,2)).astype(np.float32)
-                Store_transition = save_data_for_training(Store_transition, count, observation_seq_adjust, action_adjust, reward_['total'], observation_seq_adjust_)
+                observation_seq_ = DQN.observe(drone_No, allocVec_['total'], dronePos, userPos)
+                observation_seq_adjust_ = (np.swapaxes(np.swapaxes(observation_seq_,0,2),1,2)).astype(np.float32)                      
+                Store_transition[drone_No] = save_data_for_training(Store_transition[drone_No], count[drone_No], observation_seq, action_adjust, reward_['total'], observation_seq_)
+                count[drone_No] += 1
                 save_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, dronePos, i, j, drone_No)
-                count += 1
-                state, r, action, state_ = grasp_data_for_training(Store_transition, count)
-                state = torch.from_numpy(state)
-                state_ = torch.from_numpy(state_)
-                r = torch.from_numpy(r)
-                if cf.use_cuda: 
-                    Q_eval = eval_network[drone_No](state.cuda())
-                    Q_next = target_network[drone_No](state_.cuda())
-                    loss = DQN.pred_loss(r.cuda(), Q_next, Q_eval, action)
-                else:
-                    Q_eval = eval_network[drone_No](state.cpu())
-                    Q_next = target_network[drone_No](state_.cpu())
-                    loss = DQN.pred_loss(r.cpu(), Q_next, Q_eval, action)
+                re = []
+                for k in range(10):
+                    state, r, action, state_ = grasp_data_for_training(Store_transition[drone_No], count[drone_No])
+                    state = torch.from_numpy(np.array([(np.swapaxes(np.swapaxes(state,0,2),1,2)).astype(np.float32)]))
+                    state_ = torch.from_numpy(np.array([(np.swapaxes(np.swapaxes(state_,0,2),1,2)).astype(np.float32)]))
+                    if k==0:
+                        Q_eval = torch.unsqueeze(eval_network[drone_No](state.cuda())[0][action],0)
+                        Q_next = target_network[drone_No](state_.cuda())
+                    else:
+                        Q_eval = torch.cat([Q_eval,torch.unsqueeze(eval_network[drone_No](state.cuda())[0][action],0)],dim=0)
+                        Q_next = torch.cat([Q_next,target_network[drone_No](state_.cuda())],dim=0)
+                    re = np.append(re,r/1050.0)
+                loss = DQN.pred_loss(torch.from_numpy(re.astype(np.float32)).cuda(), Q_next, Q_eval, action)
                 optimizer_eval[drone_No].zero_grad()  # 原来是optimizer_target
                 loss.backward(retain_graph=True)
                 optimizer_eval[drone_No].step()  # 原来是optimizer_target
                 print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(i + 1, args.episode, j + 1, args.step, loss.item()))
-                torch.save(eval_network[drone_No].state_dict(), 'Network Parameters\\' + str(count) + 'th_eval_network_parameters')
+                torch.save(eval_network[drone_No].state_dict(), 'Network Parameters\\' + str(drone_No) + 'th_eval_network_parameters')
+                if count[drone_No] % args.interval == 0 and flagForStop == False:
+                    target_network[drone_No].load_state_dict(torch.load('Network Parameters\\' + str(drone_No) + 'th_eval_network_parameters'))
+                    print('Drone' + str(drone_No) + ' updated')
+                    print ('Network Parameters\\' + str(count) + 'th_eval_network_parameters is successfully load to the target network')                    
                 if isMessageReceived and 'Pause_Drone' in message:
                     message = str(message).replace("b","")
                     print('Message is received'+ message)
@@ -367,24 +460,17 @@ def main(args):
                     except:
                         print(repr(message))
                         print(sys.exc_info())
-                    if DroneDict['Pause_Drone'][str(drone_No)] == False:
-                        target_network[drone_No].load_state_dict(torch.load('Network Parameters\\' + str(count) + 'th_eval_network_parameters'))
-                        print('Drone' + str(drone_No) + ' updated')
-                    print ('Network Parameters\\' + str(count) + 'th_eval_network_parameters is successfully load to the target network')
-                    #nonlocal isMessageReceived
+                    if DroneDict['Pause_Drone'][str(drone_No)] == True:
+                        flagForStop = True
                     isMessageReceived = not isMessageReceived
-                    #print(isMessageReceived)
-                #if count % args.interval == 0 or (count+1) % args.interval == 0 :           #此处要改
-                   # File = open(filename, 'r')
-                   # DroneDict = json.load(File)
-                   # if DroneDict['Pause_Drone'][str(drone_No)] == False:
-                    #    target_network[drone_No].load_state_dict(torch.load('Network Parameters\\' + str(count) + 'th_eval_network_parameters'))
-                    #    print('Drone' + str(drone_No) + ' update')
-                   # print ('Network Parameters\\' + str(count) + 'th_eval_network_parameters is successfully load to the target network')
-                counter += 1
-                total += reward_['total']
+            total += reward_['total']
+            for drone_No in range(args.numDrones):
+                dtotal[drone_No] += reward_[str(drone_No)]
+            counter += 1
             if j%20 ==0:
                 print('episode', i,' with average reward:', total/counter)
+                for drone_No in range(args.numDrones):
+                    print('episode', str(i),'drone' + str(drone_No) + ' with average reward:', dtotal[drone_No]/counter)
         counts += [total / counter]
         print('All episodes rewards:', counts)
         np.save('rewards\\reward_episod_' + str(i) + '.npy', count)

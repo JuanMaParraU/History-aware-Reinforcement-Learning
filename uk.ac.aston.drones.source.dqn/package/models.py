@@ -135,9 +135,8 @@ class Deep_Q_Network:
         return state
 
     def pred_loss(self, reward, Q_next, Q_eval, action):
-        Q_target = Q_eval.clone()
-        Q_target[0, action] = reward[0] + self.args.LAMBDA * torch.max(Q_next)
-        predict_loss = nn.MSELoss(reduction='mean')
+        Q_target = reward + self.args.LAMBDA * torch.max(Q_next,1)[0]      #为什么是reward[0]
+        predict_loss = nn.MSELoss()
         loss = predict_loss(Q_target, Q_eval)
         return loss
 
@@ -146,7 +145,7 @@ class net(nn.Module):
         super(net, self).__init__()
         self.args = args
         # Encoder layers
-        self.enc_conv1_1 = nn.Conv2d(3*self.args.sequence_len , 64, kernel_size=3, stride=1, padding=1, bias=False)
+        self.enc_conv1_1 = nn.Conv2d(3 , 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.enc_bn1_1 = nn.BatchNorm2d(64)
         self.enc_drop1 = nn.Dropout(p=self.args.drop_rate)
         self.enc_conv1_2 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=False)
@@ -159,41 +158,21 @@ class net(nn.Module):
         self.enc_conv2_2 = nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=False)
         self.enc_bn2_2 = nn.BatchNorm2d(128)
         self.enc_max_pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
-
-        self.enc_conv3_1 = nn.Conv2d(128, 256, kernel_size=3, stride=1, padding=1, bias=False)
-        self.enc_bn3_1 = nn.BatchNorm2d(256)
-        self.enc_drop3 = nn.Dropout(p=self.args.drop_rate)
-        self.enc_conv3_2 = nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=False)
-        self.enc_bn3_2 = nn.BatchNorm2d(256)
-        self.enc_max_pool3 = nn.MaxPool2d(kernel_size=2, stride=2)
-
-        self.enc_conv4_1 = nn.Conv2d(256, 512, kernel_size=3, stride=1, padding=1, bias=False)
-        self.enc_bn4_1 = nn.BatchNorm2d(512)
-        self.enc_drop4 = nn.Dropout(p=self.args.drop_rate)
-        self.enc_conv4_2 = nn.Conv2d(512, 512, kernel_size=3, stride=1, padding=1, bias=False)
-        self.enc_bn4_2 = nn.BatchNorm2d(512)
-        self.enc_avg_pool4 = nn.AvgPool2d(kernel_size=2, stride=2)
-
-        self.fc1 = nn.Linear(512*6*6, 256)
+        
         self.fc_drop1 = nn.Dropout(p=self.args.drop_rate)
+        self.fc1 = nn.Linear(80000, 256)
         self.fc2 = nn.Linear(256, len(self.args.action_space))
-
-
         self.relu = nn.ReLU()
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
-        x = self.enc_drop1(self.relu(self.enc_bn1_1(self.enc_conv1_1(x))))
-        x = self.enc_max_pool1(self.relu(self.enc_bn1_2(self.enc_conv1_2(x))))
-        x = self.enc_drop2(self.relu(self.enc_bn2_1(self.enc_conv2_1(x))))
-        x = self.enc_max_pool2(self.relu(self.enc_bn2_2(self.enc_conv2_2(x))))
-        x = self.enc_drop3(self.relu(self.enc_bn3_1(self.enc_conv3_1(x))))
-        x = self.enc_max_pool3(self.relu(self.enc_bn3_2(self.enc_conv3_2(x))))
-        x = self.enc_drop4(self.relu(self.enc_bn4_1(self.enc_conv4_1(x))))
-        x = self.enc_avg_pool4(self.relu(self.enc_bn4_2(self.enc_conv4_2(x))))
-        x = x.reshape(1,512*6*6)
-        x = self.fc_drop1(self.fc1(x))
-        return self.fc2(x)
+        x = self.enc_drop1(self.enc_bn1_1(self.relu(self.enc_conv1_1(x))))
+        x = self.enc_max_pool1(self.enc_bn1_2(self.relu(self.enc_conv1_2(x))))
+        x = self.enc_drop2(self.enc_bn2_1(self.relu(self.enc_conv2_1(x))))
+        x = self.enc_max_pool2(self.enc_bn2_2(self.relu(self.enc_conv2_2(x))))
+        x = x.reshape(1,80000)
+        x = self.sigmoid(self.fc2(self.relu(self.fc1(x))))
+        return x
 
 
 class SARSA:
