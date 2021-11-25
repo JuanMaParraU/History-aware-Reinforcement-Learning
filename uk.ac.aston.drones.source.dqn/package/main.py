@@ -26,7 +26,7 @@ from paho.mqtt.subscribe import _on_connect
 import sys, json
 import os
 #os.environ["CUDA_DEVICES_ORDER"]="PCI_BUS_IS"
-#os.environ["CUDA_VISIBLE_DEVICES"]="2"
+#os.environ["CUDA_VISIBLE_DEVICES"]="6"
 parser = argparse.ArgumentParser(description='Reinforce Learning')
 #=======================================================================================================================
 # Environment Parameters
@@ -47,7 +47,7 @@ parser.add_argument('--LAMBDA', default=0.9, type=float, help='The discount fact
 parser.add_argument('--store_step', default=100, type=int, help='number of steps per storation, store the data from target network')
 #=======================================================================================================================
 # DQN Parameters
-parser.add_argument('--lr', default=0.005, type=float, help='The learning rate for CNN')
+parser.add_argument('--lr', default=0.01, type=float, help='The learning rate for CNN')
 parser.add_argument('--drop_rate', default=0.5, type=float, help='The drop out rate for CNN')
 parser.add_argument('--iteration', default=1, type=int, help='The number of data per train')
 parser.add_argument('--sequence_len', default=10, type=int, help='The number of observations in a sequence')
@@ -230,7 +230,18 @@ def environment_setup(i):
         if dict != 'cluster1':
             userPos = np.concatenate((userPos, cluster[dict]), axis=0)
     userPos[:, 2] = 1.5
+    user_x_y = userPos
+    userPos_XY={}
+    for i in range(np.shape(user_x_y)[0]):
+        pos=userPos_XY[str(i)]= {}
+        for j in range(np.shape(user_x_y)[1]):
+            if j == 0: 
+                pos["x"]=str(user_x_y[i,j])
+            else: 
+                if j == 1:
+                    pos["y"]=str(user_x_y[i,j])  
     #save_initial_settling(userPos,dronePos)
+    save_initial_settings_mqtt(userPos, dronePos,userPos_XY)
     return dronePos, userPos, distribution, u
 
 def on_connect(client, userdata, flags, rc):
@@ -297,7 +308,7 @@ def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, 
     drone_dict['state'] = generate_dict_from_array(dronePos, 'drone')
     drone_dict['action'] = action
     drone_dict['reward'] = reward
-    mqttClient.publish(topic_name, str(data),qos=0)             #0
+    mqttClient.publish(topic_name, str(data),qos=1)             #0
     mqttClient.loop_stop()
 def save_data_for_training(Store_transition, count, observation_seq_adjust, action_adjust, reward_, observation_seq_adjust_):
     Store_transition[count%args.store_step] = {}
