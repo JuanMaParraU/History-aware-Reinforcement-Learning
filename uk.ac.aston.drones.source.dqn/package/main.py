@@ -26,8 +26,8 @@ from paho.mqtt.subscribe import _on_connect
 import sys, json
 import os
 #from builtins import False
-#os.environ["CUDA_DEVICES_ORDER"]="PCI_BUS_IS"
-#os.environ["CUDA_VISIBLE_DEVICES"]="6"
+os.environ["CUDA_DEVICES_ORDER"]="PCI_BUS_IS"
+os.environ["CUDA_VISIBLE_DEVICES"]="7"
 parser = argparse.ArgumentParser(description='Reinforce Learning')
 #=======================================================================================================================
 # Environment Parameters
@@ -43,12 +43,12 @@ parser.add_argument('--round', default=100, type=int, help='The number of rounds
 parser.add_argument('--interval', default=200, type=int, help='The interval between each chunk of training rounds')
 parser.add_argument('--action_space', default=['east','west','south','north','stay'], type=list, help='The avaliable states')
 parser.add_argument('--EPSILON', default=0.9, type=float, help='The greedy policy')
-parser.add_argument('--ALPHA', default=0.3, type=float, help='The learning rate')
-parser.add_argument('--LAMBDA', default=0.9, type=float, help='The discount factor')
+parser.add_argument('--ALPHA', default=0.1, type=float, help='The learning rate')
+parser.add_argument('--LAMBDA', default=0.5, type=float, help='The discount factor')
 parser.add_argument('--store_step', default=100, type=int, help='number of steps per storation, store the data from target network')
 #=======================================================================================================================
 # DQN Parameters
-parser.add_argument('--lr', default=0.01, type=float, help='The learning rate for CNN')
+parser.add_argument('--lr', default=0.005, type=float, help='The learning rate for CNN')
 parser.add_argument('--drop_rate', default=0.5, type=float, help='The drop out rate for CNN')
 parser.add_argument('--iteration', default=1, type=int, help='The number of data per train')
 parser.add_argument('--sequence_len', default=10, type=int, help='The number of observations in a sequence')
@@ -308,7 +308,7 @@ def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, 
     drone_dict['state'] = generate_dict_from_array(dronePos, 'drone')
     drone_dict['action'] = action
     drone_dict['reward'] = reward
-    mqttClient.publish(topic_name, str(data),qos=1)             #0
+    mqttClient.publish(topic_name, str(data),qos=0)             #0
     mqttClient.loop_stop()
 def save_data_for_training(Store_transition, count, observation_seq_adjust, action_adjust, reward_, observation_seq_adjust_):
     Store_transition[count%args.store_step] = {}
@@ -428,7 +428,7 @@ def main(args):
                 observation_seq_adjust_ = (np.swapaxes(np.swapaxes(observation_seq_,0,2),1,2)).astype(np.float32)                      
                 Store_transition[drone_No] = save_data_for_training(Store_transition[drone_No], count[drone_No], observation_seq, action_adjust, reward_['total'], observation_seq_)
                 count[drone_No] += 1
-                save_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, dronePos, i, j, drone_No)
+                #save_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, dronePos, i, j, drone_No)
                 re = []
                 for k in range(10):
                     state, r, action, state_ = grasp_data_for_training(Store_transition[drone_No], count[drone_No])
@@ -445,9 +445,10 @@ def main(args):
                 optimizer_eval[drone_No].zero_grad()  # 原来是optimizer_target
                 loss.backward(retain_graph=True)
                 optimizer_eval[drone_No].step()  # 原来是optimizer_target
-                print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(i + 1, args.episode, j + 1, args.step, loss.item()))
-                torch.save(eval_network[drone_No].state_dict(), 'Network Parameters\\' + str(drone_No) + 'th_eval_network_parameters')
+                #print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(i + 1, args.episode, j + 1, args.step, loss.item()))
+                #torch.save(eval_network[drone_No].state_dict(), 'Network Parameters\\' + str(drone_No) + 'th_eval_network_parameters')
                 if count[drone_No] % args.interval == 0 and flagForStop == False:
+                    torch.save(eval_network[drone_No].state_dict(), 'Network Parameters\\' + str(drone_No) + 'th_eval_network_parameters')
                     target_network[drone_No].load_state_dict(torch.load('Network Parameters\\' + str(drone_No) + 'th_eval_network_parameters'))
                     print('Drone' + str(drone_No) + ' updated')
                     print ('Network Parameters\\' + str(count) + 'th_eval_network_parameters is successfully load to the target network')                    
@@ -473,7 +474,7 @@ def main(args):
                     print('episode', str(i),'drone' + str(drone_No) + ' with average reward:', dtotal[drone_No]/counter)
         counts += [total / counter]
         print('All episodes rewards:', counts)
-        np.save('rewards\\reward_episod_' + str(i) + '.npy', count)
+        np.save('rewards\\reward_episod_' + str(i) + '.npy', counts)
 
 if __name__ == "__main__":
     isMessageReceived = False
