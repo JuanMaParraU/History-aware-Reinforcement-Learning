@@ -7,14 +7,12 @@ import torch.nn.functional as F
 import torch.optim as optim
 import config as cf
 import math
-#import pymongo
 import argparse
 import random
 import models
 from models import SARSA
 from models import Deep_Q_Network, net
 import pandas as pd
-#from pymongo import MongoClient
 from pandas import DataFrame,Series
 import matplotlib.pyplot as plt, time
 from matplotlib.patches import Circle
@@ -32,7 +30,7 @@ parser = argparse.ArgumentParser(description='Reinforce Learning')
 #=======================================================================================================================
 # Environment Parameters
 parser.add_argument('--random_seed', default=19, type=int, help='The specific seed to generate the random numbers')
-parser.add_argument('--numDrones', default=2, type=int, help='The number of Drones(UAV)')
+parser.add_argument('--numDrones', default=8, type=int, help='The number of Drones(UAV)')
 parser.add_argument('--numUsers', default=1050, type=int, help='The number of Users')
 parser.add_argument('--length', default=100, type=int, help='The length of the area(meter)')
 parser.add_argument('--width', default=100, type=int, help='The width of the area(meter)')
@@ -62,11 +60,11 @@ parser.add_argument('--BW', default=200e3, type=int, help='The bandwidth')
 parser.add_argument('--N0', default=10**(-20.4), type=float, help='The N0')
 parser.add_argument('--SIGMA', default=20, type=int, help='The SIGMA')
 #=======================================================================================================================
-# Database Parameters
-parser.add_argument('--database_name', default='DQN_Data_Base', type=str, help='The name of database')
-parser.add_argument('--collection_name', default='Q_table_collection', type=str, help='The name of the collection')
-parser.add_argument('--host', default='127.0.0.1', type=str, help='The host type')
-parser.add_argument('--mongodb_port', default=5939, type=int, help='The port of database')
+# Mqtt Parameters
+parser.add_argument('--mqttBroker', default='tcp://broker.mqttdashboard.com', type=str, help='The mqtt broker url, e.g tcp://127.0.0.1')
+parser.add_argument('--q_table_topic', default='Q_table_collection.json', type=str, help='The name of the main topic')
+parser.add_argument('--port', default=1883, type=int, help='The mqtt port')
+parser.add_argument('--initial_param_topic', default='initial_setting.json', type=str, help='The name of the topic for the initial parameters')
 
 args = parser.parse_args()
 sarsa = SARSA(args)
@@ -240,7 +238,6 @@ def environment_setup(i):
             else: 
                 if j == 1:
                     pos["y"]=str(user_x_y[i,j])  
-    #save_initial_settling(userPos,dronePos)
     save_initial_settings_mqtt(userPos, dronePos,userPos_XY)
     return dronePos, userPos, distribution, u
 
@@ -258,7 +255,7 @@ def on_log(client, userdata, level, buf):
     global log
     log = buf
 
-def save_initial_settings_mqtt(U_p, D_p, userPos_XY, name = args.database_name, topic_name ='initial_setting.json', host='broker.mqttdashboard.com', port=1883):
+def save_initial_settings_mqtt(U_p, D_p, userPos_XY, topic_name =args.initial_param_topic, host=args.mqttBroker, port=args.port):
     mqttClient=mqtt.Client(client_id="JuanMaServer")
     mqttClient.on_connect = on_connect
     mqttClient.on_log = on_log
@@ -287,10 +284,10 @@ def save_initial_settings_mqtt(U_p, D_p, userPos_XY, name = args.database_name, 
     print('here')
     mqttClient.publish(topic_name, str(initial_info))
     userPos_XY = str(userPos_XY).replace("\'","\"")
-    mqttClient.publish("users_pos_ini", str(userPos_XY),qos=1)
+    mqttClient.publish('users_pos_ini', str(userPos_XY),qos=1)
     print('published')
     mqttClient.loop_stop()
-def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, reward, dronePos, episode, step, drone, topic_name = 'Q_table_collection.json', host='broker.mqttdashboard.com', port=1883):
+def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, reward, dronePos, episode, step, drone, topic_name = args.q_table_topic, host=args.mqttBroker, port=args.port):
     mqttClient=mqtt.Client(client_id="PublisherQTable")
     mqttClient.on_connect = on_connect
     mqttClient.on_message = on_message
@@ -308,7 +305,7 @@ def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, 
     drone_dict['state'] = generate_dict_from_array(dronePos, 'drone')
     drone_dict['action'] = action
     drone_dict['reward'] = reward
-    mqttClient.publish(topic_name, str(data),qos=0)             #0
+    mqttClient.publish(topic_name, str(data),qos=1)             #0
     mqttClient.loop_stop()
 def save_data_for_training(Store_transition, count, observation_seq_adjust, action_adjust, reward_, observation_seq_adjust_):
     Store_transition[count%args.store_step] = {}
@@ -428,7 +425,7 @@ def main(args):
                 observation_seq_adjust_ = (np.swapaxes(np.swapaxes(observation_seq_,0,2),1,2)).astype(np.float32)                      
                 Store_transition[drone_No] = save_data_for_training(Store_transition[drone_No], count[drone_No], observation_seq, action_adjust, reward_['total'], observation_seq_)
                 count[drone_No] += 1
-                #save_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, dronePos, i, j, drone_No)
+                save_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, dronePos, i, j, drone_No)
                 re = []
                 for k in range(10):
                     state, r, action, state_ = grasp_data_for_training(Store_transition[drone_No], count[drone_No])
