@@ -30,7 +30,7 @@ parser = argparse.ArgumentParser(description='Reinforce Learning')
 #=======================================================================================================================
 # Environment Parameters
 parser.add_argument('--random_seed', default=19, type=int, help='The specific seed to generate the random numbers')
-parser.add_argument('--numDrones', default=8, type=int, help='The number of Drones(UAV)')
+parser.add_argument('--numDrones', default=4, type=int, help='The number of Drones(UAV)')
 parser.add_argument('--numUsers', default=1050, type=int, help='The number of Users')
 parser.add_argument('--length', default=100, type=int, help='The length of the area(meter)')
 parser.add_argument('--width', default=100, type=int, help='The width of the area(meter)')
@@ -61,7 +61,7 @@ parser.add_argument('--N0', default=10**(-20.4), type=float, help='The N0')
 parser.add_argument('--SIGMA', default=20, type=int, help='The SIGMA')
 #=======================================================================================================================
 # Mqtt Parameters
-parser.add_argument('--mqttBroker', default='tcp://broker.mqttdashboard.com', type=str, help='The mqtt broker url, e.g tcp://127.0.0.1')
+parser.add_argument('--mqttBroker', default='broker.mqttdashboard.com', type=str, help='The mqtt broker url, e.g 127.0.0.1')
 parser.add_argument('--q_table_topic', default='Q_table_collection.json', type=str, help='The name of the main topic')
 parser.add_argument('--port', default=1883, type=int, help='The mqtt port')
 parser.add_argument('--initial_param_topic', default='initial_setting.json', type=str, help='The name of the topic for the initial parameters')
@@ -242,7 +242,8 @@ def environment_setup(i):
     return dronePos, userPos, distribution, u
 
 def on_connect(client, userdata, flags, rc):
-    print('CONNACK received with code %d.' % (rc))
+    code = rc
+    #print('CONNACK received with code %d.' % (rc))
 
 def on_message(client, userdata, msg):
     global isMessageReceived 
@@ -254,12 +255,14 @@ def on_message(client, userdata, msg):
 def on_log(client, userdata, level, buf):
     global log
     log = buf
+    #print(log)
 
 def save_initial_settings_mqtt(U_p, D_p, userPos_XY, topic_name =args.initial_param_topic, host=args.mqttBroker, port=args.port):
-    mqttClient=mqtt.Client(client_id="JuanMaServer")
+    mqttClient=mqtt.Client(client_id="ETeMoXServer")
     mqttClient.on_connect = on_connect
     mqttClient.on_log = on_log
-    mqttClient.connect_async(host, port)
+    mqttClient.connect(host, port)
+    print(host,port)
     mqttClient.loop_start()
     initial_info = {}
     initial_info ['random_seed'] = args.random_seed
@@ -305,7 +308,7 @@ def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, 
     drone_dict['state'] = generate_dict_from_array(dronePos, 'drone')
     drone_dict['action'] = action
     drone_dict['reward'] = reward
-    mqttClient.publish(topic_name, str(data),qos=1)             #0
+    mqttClient.publish(topic_name, str(data),qos=1)
     mqttClient.loop_stop()
 def save_data_for_training(Store_transition, count, observation_seq_adjust, action_adjust, reward_, observation_seq_adjust_):
     Store_transition[count%args.store_step] = {}
@@ -367,7 +370,7 @@ def main(args):
     mqttClient=mqtt.Client()
     mqttClient.on_connect = on_connect
     mqttClient.on_message = on_message
-    mqttClient.connect('broker.mqttdashboard.com', 1883)
+    mqttClient.connect(args.mqttBroker, args.port)
     mqttClient.loop_start()
     mqttClient.subscribe("stopping_criteria_cep")
     dronePos, userPos, distribution, u = environment_setup(0)
