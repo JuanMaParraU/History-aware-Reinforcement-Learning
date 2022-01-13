@@ -492,41 +492,11 @@ def main(args):
             dcounts[drone_No] += [dtotal[drone_No] / counter]
             np.save('drone' + str(drone_No) +'_episode_99.npy', dcounts[drone_No])
             print('drone' + str(drone_No) + ' rewards:', dcounts[drone_No])
-        if last+3 <= i:
-            ac = (counts[i-2] + counts[i-1] + counts[i]) / 3.0
-            if abs(counts[i-2] - ac) < ac * 0.1 and abs(counts[i-1] - ac) < ac * 0.1 and abs(counts[i] - ac) < ac * 0.1:
-                last = i
-                if MaxR < ac:
-                    if flag != 0:
-                        down = down*0.5
-                        flag = 0
-                    MaxR = ac
-                    for drone_No in range(args.numDrones):
-                        MaxGama = Lambda[drone_No]
-                        Lambda[drone_No] = Lambda[drone_No] - down
-                else:
-                    if flag == 0:
-                        down = down*0.5
-                        for drone_No in range(args.numDrones):
-                            Lambda[drone_No] = MaxGama + down
-                        flag = 1
-                    elif flag == 1:
-                        for drone_No in range(args.numDrones):
-                            Lambda[drone_No] = MaxGama - down
-                        flag = 2
-                    elif flag == 2:
-                        down = down*0.5
-                        for drone_No in range(args.numDrones):
-                            Lambda[drone_No] = MaxGama + down
-                        flag = 1
-                
             '''
                 store_length[drone_No] = 100
                 for p in optimizer_eval[drone_No].param_groups:
                     p['lr'] = 0.005
             '''
-        print(Lambda[0])
-        gama.append(Lambda)
 if __name__ == "__main__":
     isMessageReceived = False
     message = " "
