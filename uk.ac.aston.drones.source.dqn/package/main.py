@@ -7,12 +7,14 @@ import torch.nn.functional as F
 import torch.optim as optim
 import config as cf
 import math
+#import pymongo
 import argparse
 import random
 import models
 from models import SARSA
 from models import Deep_Q_Network, net
 import pandas as pd
+#from pymongo import MongoClient
 from pandas import DataFrame,Series
 import matplotlib.pyplot as plt, time
 from matplotlib.patches import Circle
@@ -60,11 +62,11 @@ parser.add_argument('--BW', default=200e3, type=int, help='The bandwidth')
 parser.add_argument('--N0', default=10**(-20.4), type=float, help='The N0')
 parser.add_argument('--SIGMA', default=20, type=int, help='The SIGMA')
 #=======================================================================================================================
-# Mqtt Parameters
-parser.add_argument('--mqttBroker', default='broker.mqttdashboard.com', type=str, help='The mqtt broker url, e.g 127.0.0.1')
-parser.add_argument('--q_table_topic', default='Q_table_collection.json', type=str, help='The name of the main topic')
-parser.add_argument('--port', default=1883, type=int, help='The mqtt port')
-parser.add_argument('--initial_param_topic', default='initial_setting.json', type=str, help='The name of the topic for the initial parameters')
+# Database Parameters
+parser.add_argument('--database_name', default='DQN_Data_Base', type=str, help='The name of database')
+parser.add_argument('--collection_name', default='Q_table_collection', type=str, help='The name of the collection')
+parser.add_argument('--host', default='127.0.0.1', type=str, help='The host type')
+parser.add_argument('--mongodb_port', default=5939, type=int, help='The port of database')
 
 args = parser.parse_args()
 sarsa = SARSA(args)
@@ -238,12 +240,12 @@ def environment_setup(i):
             else: 
                 if j == 1:
                     pos["y"]=str(user_x_y[i,j])  
+    #save_initial_settling(userPos,dronePos)
     save_initial_settings_mqtt(userPos, dronePos,userPos_XY)
     return dronePos, userPos, distribution, u
 
 def on_connect(client, userdata, flags, rc):
-    code = rc
-    #print('CONNACK received with code %d.' % (rc))
+    print('CONNACK received with code %d.' % (rc))
 
 def on_message(client, userdata, msg):
     global isMessageReceived 
@@ -255,14 +257,12 @@ def on_message(client, userdata, msg):
 def on_log(client, userdata, level, buf):
     global log
     log = buf
-    #print(log)
 
-def save_initial_settings_mqtt(U_p, D_p, userPos_XY, topic_name =args.initial_param_topic, host=args.mqttBroker, port=args.port):
-    mqttClient=mqtt.Client(client_id="ETeMoXServer")
+def save_initial_settings_mqtt(U_p, D_p, userPos_XY, name = args.database_name, topic_name ='initial_setting.json', host='broker.mqttdashboard.com', port=1883):
+    mqttClient=mqtt.Client(client_id="JuanMaServer")
     mqttClient.on_connect = on_connect
     mqttClient.on_log = on_log
-    mqttClient.connect(host, port)
-    print(host,port)
+    mqttClient.connect_async(host, port)
     mqttClient.loop_start()
     initial_info = {}
     initial_info ['random_seed'] = args.random_seed
@@ -287,10 +287,10 @@ def save_initial_settings_mqtt(U_p, D_p, userPos_XY, topic_name =args.initial_pa
     print('here')
     mqttClient.publish(topic_name, str(initial_info))
     userPos_XY = str(userPos_XY).replace("\'","\"")
-    mqttClient.publish('users_pos_ini', str(userPos_XY),qos=1)
+    mqttClient.publish("users_pos_ini", str(userPos_XY),qos=1)
     print('published')
     mqttClient.loop_stop()
-def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, reward, dronePos, episode, step, drone, topic_name = args.q_table_topic, host=args.mqttBroker, port=args.port):
+def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, reward, dronePos, episode, step, drone, topic_name = 'Q_table_collection.json', host='broker.mqttdashboard.com', port=1883):
     mqttClient=mqtt.Client(client_id="PublisherQTable")
     mqttClient.on_connect = on_connect
     mqttClient.on_message = on_message
@@ -308,7 +308,7 @@ def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, 
     drone_dict['state'] = generate_dict_from_array(dronePos, 'drone')
     drone_dict['action'] = action
     drone_dict['reward'] = reward
-    mqttClient.publish(topic_name, str(data),qos=1)
+    mqttClient.publish(topic_name, str(data),qos=1)             #0
     mqttClient.loop_stop()
 def save_data_for_training(Store_transition, count, observation_seq_adjust, action_adjust, reward_, observation_seq_adjust_):
     Store_transition[count%args.store_step] = {}
@@ -320,7 +320,10 @@ def save_data_for_training(Store_transition, count, observation_seq_adjust, acti
     # np.save('Data\\' + str(count - count%args.store_step ) + '_to_' + str(count - count%args.store_step + args.store_step - 1) + '.npy', Store_transition)
     return Store_transition
 
-def grasp_data_for_training(Store_transition, count, numbers = 1):
+def grasp_data_for_training(Store_transition, count, eval_network, target_network,numbers = 10):
+    r_ = []
+    k = 0
+    action_ = []
     Store = Store_transition
     if count<args.store_step:
         selected = sample([i for i in range(count)], numbers)
@@ -329,11 +332,20 @@ def grasp_data_for_training(Store_transition, count, numbers = 1):
     for dict in selected:
         state = Store[dict]['observation_seq']
         state_ = Store[dict]['observation_seq_']
-        r_ = Store[dict]['reward_']
+        r = Store[dict]['reward_']
         action = Store[dict]['action']
-    return  state, r_, action, state_
-
-
+        state = torch.from_numpy(np.array([(np.swapaxes(np.swapaxes(state,0,2),1,2)).astype(np.float32)]))
+        state_ = torch.from_numpy(np.array([(np.swapaxes(np.swapaxes(state_,0,2),1,2)).astype(np.float32)]))
+        if k == 0:
+            Q_eval = torch.unsqueeze(eval_network(state.cuda())[0][action],0)
+            Q_next = target_network(state_.cuda())
+        else:
+            Q_eval = torch.cat([Q_eval,torch.unsqueeze(eval_network(state.cuda())[0][action],0)],dim=0)
+            Q_next = torch.cat([Q_next,target_network(state_.cuda())],dim=0)
+        r_ = np.append(r_,r/1050.0)
+        action_ = np.append(action_,action)
+        k = k + 1
+    return  Q_eval, r_, action_, Q_next
 def main(args):
     # ========================================== start up eval net =====================================================
     global isMessageReceived
@@ -348,8 +360,20 @@ def main(args):
     optimizer_target = []
     target_network = []
     dcounts = []
+    pos = []
+    store_length = []
+    Lambda = []
+    gama = []
+    down = 0.1
+    MaxR = 0
+    MaxGama = 0
+    flag = 0
+    last = -1
     for i in range(args.numDrones):
         dcounts.append([])
+        Lambda.append(0.5)
+        pos.append([])
+        store_length.append(100)
         eval_network.append(net(args))
         if cf.use_cuda:
             eval_network[i].cuda()
@@ -370,7 +394,7 @@ def main(args):
     mqttClient=mqtt.Client()
     mqttClient.on_connect = on_connect
     mqttClient.on_message = on_message
-    mqttClient.connect(args.mqttBroker, args.port)
+    mqttClient.connect('broker.mqttdashboard.com', 1883)
     mqttClient.loop_start()
     mqttClient.subscribe("stopping_criteria_cep")
     dronePos, userPos, distribution, u = environment_setup(0)
@@ -428,23 +452,12 @@ def main(args):
                 observation_seq_adjust_ = (np.swapaxes(np.swapaxes(observation_seq_,0,2),1,2)).astype(np.float32)                      
                 Store_transition[drone_No] = save_data_for_training(Store_transition[drone_No], count[drone_No], observation_seq, action_adjust, reward_['total'], observation_seq_)
                 count[drone_No] += 1
-                save_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, dronePos, i, j, drone_No)
-                re = []
-                for k in range(10):
-                    state, r, action, state_ = grasp_data_for_training(Store_transition[drone_No], count[drone_No])
-                    state = torch.from_numpy(np.array([(np.swapaxes(np.swapaxes(state,0,2),1,2)).astype(np.float32)]))
-                    state_ = torch.from_numpy(np.array([(np.swapaxes(np.swapaxes(state_,0,2),1,2)).astype(np.float32)]))
-                    if k==0:
-                        Q_eval = torch.unsqueeze(eval_network[drone_No](state.cuda())[0][action],0)
-                        Q_next = target_network[drone_No](state_.cuda())
-                    else:
-                        Q_eval = torch.cat([Q_eval,torch.unsqueeze(eval_network[drone_No](state.cuda())[0][action],0)],dim=0)
-                        Q_next = torch.cat([Q_next,target_network[drone_No](state_.cuda())],dim=0)
-                    re = np.append(re,r/1050.0)
-                loss = DQN.pred_loss(torch.from_numpy(re.astype(np.float32)).cuda(), Q_next, Q_eval, action)
-                optimizer_eval[drone_No].zero_grad()  # 原来是optimizer_target
+                #save_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, dronePos, i, j, drone_No)
+                Q_eval, re, action, Q_next = grasp_data_for_training(Store_transition[drone_No], count[drone_No], eval_network[drone_No], target_network[drone_No])
+                loss = DQN.pred_loss(torch.from_numpy(re.astype(np.float32)).cuda(), Q_next, Q_eval, Lambda[drone_No])
+                optimizer_eval[drone_No].zero_grad()
                 loss.backward(retain_graph=True)
-                optimizer_eval[drone_No].step()  # 原来是optimizer_target
+                optimizer_eval[drone_No].step() 
                 #print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(i + 1, args.episode, j + 1, args.step, loss.item()))
                 #torch.save(eval_network[drone_No].state_dict(), 'Network Parameters\\' + str(drone_No) + 'th_eval_network_parameters')
                 if count[drone_No] % args.interval == 0 and flagForStop == False:
@@ -475,7 +488,45 @@ def main(args):
         counts += [total / counter]
         print('All episodes rewards:', counts)
         np.save('rewards\\reward_episod_' + str(i) + '.npy', counts)
-
+        for drone_No in range(args.numDrones):
+            dcounts[drone_No] += [dtotal[drone_No] / counter]
+            np.save('drone' + str(drone_No) +'_episode_99.npy', dcounts[drone_No])
+            print('drone' + str(drone_No) + ' rewards:', dcounts[drone_No])
+        if last+3 <= i:
+            ac = (counts[i-2] + counts[i-1] + counts[i]) / 3.0
+            if abs(counts[i-2] - ac) < ac * 0.1 and abs(counts[i-1] - ac) < ac * 0.1 and abs(counts[i] - ac) < ac * 0.1:
+                last = i
+                if MaxR < ac:
+                    if flag != 0:
+                        down = down*0.5
+                        flag = 0
+                    MaxR = ac
+                    for drone_No in range(args.numDrones):
+                        MaxGama = Lambda[drone_No]
+                        Lambda[drone_No] = Lambda[drone_No] - down
+                else:
+                    if flag == 0:
+                        down = down*0.5
+                        for drone_No in range(args.numDrones):
+                            Lambda[drone_No] = MaxGama + down
+                        flag = 1
+                    elif flag == 1:
+                        for drone_No in range(args.numDrones):
+                            Lambda[drone_No] = MaxGama - down
+                        flag = 2
+                    elif flag == 2:
+                        down = down*0.5
+                        for drone_No in range(args.numDrones):
+                            Lambda[drone_No] = MaxGama + down
+                        flag = 1
+                
+            '''
+                store_length[drone_No] = 100
+                for p in optimizer_eval[drone_No].param_groups:
+                    p['lr'] = 0.005
+            '''
+        print(Lambda[0])
+        gama.append(Lambda)
 if __name__ == "__main__":
     isMessageReceived = False
     message = " "
