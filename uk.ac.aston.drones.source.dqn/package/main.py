@@ -453,7 +453,7 @@ def main(args):
                 observation_seq_adjust_ = (np.swapaxes(np.swapaxes(observation_seq_,0,2),1,2)).astype(np.float32)                      
                 Store_transition[drone_No] = save_data_for_training(Store_transition[drone_No], count[drone_No], observation_seq, action_adjust, reward_['total'], observation_seq_)
                 count[drone_No] += 1
-                #save_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, dronePos, i, j, drone_No)
+                save_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, dronePos, i, j, drone_No)
                 Q_eval, re, action, Q_next = grasp_data_for_training(Store_transition[drone_No], count[drone_No], eval_network[drone_No], target_network[drone_No])
                 loss = DQN.pred_loss(torch.from_numpy(re.astype(np.float32)).cuda(), Q_next, Q_eval, Lambda[drone_No])
                 optimizer_eval[drone_No].zero_grad()
@@ -493,7 +493,6 @@ def main(args):
             dcounts[drone_No] += [dtotal[drone_No] / counter]
             np.save('drone' + str(drone_No) +'_episode_99.npy', dcounts[drone_No])
             print('drone' + str(drone_No) + ' rewards:', dcounts[drone_No])
-		
         if last+3 <= i:             #last is used to record the current episode i. Force the code to execute 3 episodes.
             ac = (counts[i-2] + counts[i-1] + counts[i]) / 3.0
             if abs(counts[i-2] - ac) < ac * 0.1 and abs(counts[i-1] - ac) < ac * 0.1 and abs(counts[i] - ac) < ac * 0.1:
