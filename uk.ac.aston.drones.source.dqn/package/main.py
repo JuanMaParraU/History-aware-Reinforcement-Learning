@@ -24,13 +24,13 @@ from paho.mqtt.subscribe import _on_connect
 import sys, json
 import os
 #from builtins import False
-#os.environ["CUDA_DEVICES_ORDER"]="PCI_BUS_IS"
-#os.environ["CUDA_VISIBLE_DEVICES"]="6"
+os.environ["CUDA_DEVICES_ORDER"]="PCI_BUS_IS"
+os.environ["CUDA_VISIBLE_DEVICES"]="7"
 parser = argparse.ArgumentParser(description='Reinforce Learning')
 #=======================================================================================================================
 # Environment Parameters
 parser.add_argument('--random_seed', default=19, type=int, help='The specific seed to generate the random numbers')
-parser.add_argument('--numDrones', default=2, type=int, help='The number of Drones(UAV)')
+parser.add_argument('--numDrones', default=4, type=int, help='The number of Drones(UAV)')
 parser.add_argument('--numUsers', default=1050, type=int, help='The number of Users')
 parser.add_argument('--length', default=100, type=int, help='The length of the area(meter)')
 parser.add_argument('--width', default=100, type=int, help='The width of the area(meter)')
@@ -41,12 +41,12 @@ parser.add_argument('--round', default=100, type=int, help='The number of rounds
 parser.add_argument('--interval', default=200, type=int, help='The interval between each chunk of training rounds')
 parser.add_argument('--action_space', default=['east','west','south','north','stay'], type=list, help='The avaliable states')
 parser.add_argument('--EPSILON', default=0.9, type=float, help='The greedy policy')
-parser.add_argument('--ALPHA', default=0.3, type=float, help='The learning rate')
-parser.add_argument('--LAMBDA', default=0.9, type=float, help='The discount factor')
+parser.add_argument('--ALPHA', default=0.1, type=float, help='The learning rate')
+parser.add_argument('--LAMBDA', default=0.5, type=float, help='The discount factor')
 parser.add_argument('--store_step', default=100, type=int, help='number of steps per storation, store the data from target network')
 #=======================================================================================================================
 # DQN Parameters
-parser.add_argument('--lr', default=0.01, type=float, help='The learning rate for CNN')
+parser.add_argument('--lr', default=0.005, type=float, help='The learning rate for CNN')
 parser.add_argument('--drop_rate', default=0.5, type=float, help='The drop out rate for CNN')
 parser.add_argument('--iteration', default=1, type=int, help='The number of data per train')
 parser.add_argument('--sequence_len', default=10, type=int, help='The number of observations in a sequence')
@@ -321,7 +321,10 @@ def save_data_for_training(Store_transition, count, observation_seq_adjust, acti
     # np.save('Data\\' + str(count - count%args.store_step ) + '_to_' + str(count - count%args.store_step + args.store_step - 1) + '.npy', Store_transition)
     return Store_transition
 
-def grasp_data_for_training(Store_transition, count, numbers = 1):
+def grasp_data_for_training(Store_transition, count, eval_network, target_network,numbers = 10):
+    r_ = []
+    k = 0
+    action_ = []
     Store = Store_transition
     if count<args.store_step:
         selected = sample([i for i in range(count)], numbers)
@@ -330,10 +333,20 @@ def grasp_data_for_training(Store_transition, count, numbers = 1):
     for dict in selected:
         state = Store[dict]['observation_seq']
         state_ = Store[dict]['observation_seq_']
-        r_ = Store[dict]['reward_']
+        r = Store[dict]['reward_']
         action = Store[dict]['action']
-    return  state, r_, action, state_
-
+        state = torch.from_numpy(np.array([(np.swapaxes(np.swapaxes(state,0,2),1,2)).astype(np.float32)]))
+        state_ = torch.from_numpy(np.array([(np.swapaxes(np.swapaxes(state_,0,2),1,2)).astype(np.float32)]))
+        if k == 0:
+            Q_eval = torch.unsqueeze(eval_network(state.cuda())[0][action],0)
+            Q_next = target_network(state_.cuda())
+        else:
+            Q_eval = torch.cat([Q_eval,torch.unsqueeze(eval_network(state.cuda())[0][action],0)],dim=0)
+            Q_next = torch.cat([Q_next,target_network(state_.cuda())],dim=0)
+        r_ = np.append(r_,r/1050.0)
+        action_ = np.append(action_,action)
+        k = k + 1
+    return  Q_eval, r_, action_, Q_next
 def main(args):
     # ========================================== start up eval net =====================================================
     global isMessageReceived
@@ -440,7 +453,7 @@ def main(args):
                 observation_seq_adjust_ = (np.swapaxes(np.swapaxes(observation_seq_,0,2),1,2)).astype(np.float32)                      
                 Store_transition[drone_No] = save_data_for_training(Store_transition[drone_No], count[drone_No], observation_seq, action_adjust, reward_['total'], observation_seq_)
                 count[drone_No] += 1
-                save_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, dronePos, i, j, drone_No)
+                #save_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, dronePos, i, j, drone_No)
                 Q_eval, re, action, Q_next = grasp_data_for_training(Store_transition[drone_No], count[drone_No], eval_network[drone_No], target_network[drone_No])
                 loss = DQN.pred_loss(torch.from_numpy(re.astype(np.float32)).cuda(), Q_next, Q_eval, Lambda[drone_No])
                 optimizer_eval[drone_No].zero_grad()
@@ -480,7 +493,7 @@ def main(args):
             dcounts[drone_No] += [dtotal[drone_No] / counter]
             np.save('drone' + str(drone_No) +'_episode_99.npy', dcounts[drone_No])
             print('drone' + str(drone_No) + ' rewards:', dcounts[drone_No])
-        
+		
         if last+3 <= i:             #last is used to record the current episode i. Force the code to execute 3 episodes.
             ac = (counts[i-2] + counts[i-1] + counts[i]) / 3.0
             if abs(counts[i-2] - ac) < ac * 0.1 and abs(counts[i-1] - ac) < ac * 0.1 and abs(counts[i] - ac) < ac * 0.1:
@@ -506,7 +519,6 @@ def main(args):
                         flag = 1
         np.save('episode_' + str(i) + 'Stop-pos.npy', dronePos)
         np.save('reward' + '_episode_' + str(i) + '.npy', counts)
-
 if __name__ == "__main__":
     isMessageReceived = False
     message = " "
