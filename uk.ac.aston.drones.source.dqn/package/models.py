@@ -76,8 +76,8 @@ def alloc_users(userPos, dronePos, fc, dAngle, N0, BW, Pt, connectThresh):
     RSRP = Pt-PL
     SINR = compute_SINR(RSRP,numDrones,N0,BW)
     for contDrone in range(0,numDrones):
-        allocVec[str(contDrone)][SINR[:,contDrone] > connectThresh, contDrone] = contDrone+1
-        allocVec['total'][SINR[:, contDrone] > connectThresh, contDrone] = contDrone + 1
+        allocVec[str(contDrone)][SINR[:,contDrone] > connectThresh, contDrone] = 1
+        allocVec['total'][SINR[:, contDrone] > connectThresh, contDrone] = 1
 
     for dict in allocVec:
         reward[dict] = 0
@@ -98,13 +98,11 @@ class Deep_Q_Network:
         self.args = args
 
     def observe(self, drone_No, allocVec, Drone_pos, User_pos):
-        state = np.zeros((self.args.length, self.args.width, 3))
+        state = np.zeros((self.args.length, self.args.width, 2))
         for j in range(self.args.numDrones):
             for i in range(self.args.numUsers):
                 if allocVec[i,j] == 1 and j == drone_No:
                     state[int(User_pos[i,0]),int(User_pos[i,1]), 0] = 10
-                if allocVec[i,j] == 1 and j != drone_No:
-                    state[int(User_pos[i,0]),int(User_pos[i,1]), 2] = -10
         state[int(Drone_pos[drone_No][0]),int(Drone_pos[drone_No][1]), 1] += 100
         return state
 
@@ -134,8 +132,8 @@ class Deep_Q_Network:
                 # No need to break here, it'll stop anyway
         return state
 
-    def pred_loss(self, reward, Q_next, Q_eval, action):
-        Q_target = reward + self.args.LAMBDA * torch.max(Q_next,1)[0]      #为什么是reward[0]
+    def pred_loss(self, reward, Q_next, Q_eval, Lambda):
+        Q_target = reward + Lambda * torch.max(Q_next,1)[0]      #为什么是reward[0]
         predict_loss = nn.MSELoss()
         loss = predict_loss(Q_target, Q_eval)
         return loss
@@ -145,7 +143,7 @@ class net(nn.Module):
         super(net, self).__init__()
         self.args = args
         # Encoder layers
-        self.enc_conv1_1 = nn.Conv2d(3 , 64, kernel_size=3, stride=1, padding=1, bias=False)
+        self.enc_conv1_1 = nn.Conv2d(2 , 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.enc_bn1_1 = nn.BatchNorm2d(64)
         self.enc_drop1 = nn.Dropout(p=self.args.drop_rate)
         self.enc_conv1_2 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=False)
