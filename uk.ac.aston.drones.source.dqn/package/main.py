@@ -364,7 +364,7 @@ def main(args):
     dcounts = []
     pos = []
     store_length = []
-    Lambda = []
+    Lambda = args.LAMBDA
     gama = []
     down = 0.1
     MaxR = 0
@@ -373,7 +373,6 @@ def main(args):
     last = -1
     for i in range(args.numDrones):
         dcounts.append([])
-        Lambda.append(args.LAMBDA)
         pos.append([])
         store_length.append(100)
         eval_network.append(net(args))
@@ -454,9 +453,9 @@ def main(args):
                 observation_seq_adjust_ = (np.swapaxes(np.swapaxes(observation_seq_,0,2),1,2)).astype(np.float32)                      
                 Store_transition[drone_No] = save_data_for_training(Store_transition[drone_No], count[drone_No], observation_seq, action_adjust, reward_['total'], observation_seq_)
                 count[drone_No] += 1
-                save_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, Lambda[drone_No], dronePos, i, j, drone_No)
+                save_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, Lambda, dronePos, i, j, drone_No)
                 Q_eval, re, action, Q_next = grasp_data_for_training(Store_transition[drone_No], count[drone_No], eval_network[drone_No], target_network[drone_No])
-                loss = DQN.pred_loss(torch.from_numpy(re.astype(np.float32)).cuda(), Q_next, Q_eval, Lambda[drone_No])
+                loss = DQN.pred_loss(torch.from_numpy(re.astype(np.float32)).cuda(), Q_next, Q_eval, Lambda)
                 optimizer_eval[drone_No].zero_grad()
                 loss.backward(retain_graph=True)
                 optimizer_eval[drone_No].step() 
