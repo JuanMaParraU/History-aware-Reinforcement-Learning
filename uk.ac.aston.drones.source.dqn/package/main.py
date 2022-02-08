@@ -36,7 +36,7 @@ parser.add_argument('--length', default=100, type=int, help='The length of the a
 parser.add_argument('--width', default=100, type=int, help='The width of the area(meter)')
 parser.add_argument('--resolution', default=10, type=int, help='The Resolution (meter) for drones')
 parser.add_argument('--episode', default=100, type=int, help='The number turns it plays')
-parser.add_argument('--step', default=200, type=int, help='The number of steps for any turn of runs')
+parser.add_argument('--step', default=1000, type=int, help='The number of steps for any turn of runs')
 parser.add_argument('--round', default=100, type=int, help='The number of rounds per training')
 parser.add_argument('--interval', default=200, type=int, help='The interval between each chunk of training rounds')
 parser.add_argument('--action_space', default=['east','west','south','north','stay'], type=list, help='The avaliable states')
@@ -397,9 +397,9 @@ def main(args):
     mqttClient.on_message = on_message
     mqttClient.connect('broker.mqttdashboard.com', 1883)
     mqttClient.loop_start()
-    mqttClient.subscribe("stopping_criteria_cep")
+    mqttClient.subscribe("testCEP")
     dronePos, userPos, distribution, u = environment_setup(0)
-    for i in range(args.episode):        
+    for i in range(args.episode):
         total = 0
         dtotal = []
         counter = 0
@@ -477,8 +477,7 @@ def main(args):
                         print(sys.exc_info())
                     if DroneDict['Pause_Drone'][str(drone_No)] == True:
                         flagForStop = True
-                    isMessageReceived = not isMessageReceived
-                    
+                    isMessageReceived = not isMessageReceived                    
                 if isMessageReceived and 'lambda' in message:
                     message = str(message).replace("b","")
                     print('Message is received'+ message)
@@ -488,11 +487,9 @@ def main(args):
                     except:
                         print(repr(message))
                         print(sys.exc_info())
-                    if DroneDict['Pause_Drone'][str(drone_No)] == True:
-                        flagForStop = True
-                        ##### update lambda
+                    Lambda=DroneDict.get('lamda')
+                    print('The new lambda is: '+ str(Lambda))
                     isMessageReceived = not isMessageReceived
-                    
             total += reward_['total']
             for drone_No in range(args.numDrones):
                 dtotal[drone_No] += reward_[str(drone_No)]
@@ -507,8 +504,7 @@ def main(args):
         for drone_No in range(args.numDrones):
             dcounts[drone_No] += [dtotal[drone_No] / counter]
             np.save('drone' + str(drone_No) +'_episode_99.npy', dcounts[drone_No])
-            print('drone' + str(drone_No) + ' rewards:', dcounts[drone_No])
-        
+            print('drone' + str(drone_No) + ' rewards:', dcounts[drone_No])        
         np.save('episode_' + str(i) + 'Stop-pos.npy', dronePos)
         np.save('reward' + '_episode_' + str(i) + '.npy', counts)
 if __name__ == "__main__":
