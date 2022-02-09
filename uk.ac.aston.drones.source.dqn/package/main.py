@@ -36,7 +36,7 @@ parser.add_argument('--length', default=100, type=int, help='The length of the a
 parser.add_argument('--width', default=100, type=int, help='The width of the area(meter)')
 parser.add_argument('--resolution', default=10, type=int, help='The Resolution (meter) for drones')
 parser.add_argument('--episode', default=100, type=int, help='The number turns it plays')
-parser.add_argument('--step', default=1000, type=int, help='The number of steps for any turn of runs')
+parser.add_argument('--step', default=600, type=int, help='The number of steps for any turn of runs')
 parser.add_argument('--round', default=100, type=int, help='The number of rounds per training')
 parser.add_argument('--interval', default=200, type=int, help='The interval between each chunk of training rounds')
 parser.add_argument('--action_space', default=['east','west','south','north','stay'], type=list, help='The avaliable states')
