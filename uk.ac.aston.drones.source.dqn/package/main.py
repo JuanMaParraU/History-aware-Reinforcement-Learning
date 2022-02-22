@@ -25,7 +25,7 @@ import sys, json
 import os
 #from builtins import False
 os.environ["CUDA_DEVICES_ORDER"]="PCI_BUS_IS"
-os.environ["CUDA_VISIBLE_DEVICES"]="7"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 parser = argparse.ArgumentParser(description='Reinforce Learning')
 #=======================================================================================================================
 # Environment Parameters
@@ -508,6 +508,7 @@ def main(args):
         np.save('episode_' + str(i) + 'Stop-pos.npy', dronePos)
         np.save('reward' + '_episode_' + str(i) + '.npy', counts)
 if __name__ == "__main__":
+    os.environ["CUDA_VISIBLE_DEVICES"]="4,5"
     isMessageReceived = False
     message = " "
     main(args)
