@@ -42,7 +42,7 @@ parser.add_argument('--interval', default=200, type=int, help='The interval betw
 parser.add_argument('--action_space', default=['east','west','south','north','stay'], type=list, help='The avaliable states')
 parser.add_argument('--EPSILON', default=0.9, type=float, help='The greedy policy')
 parser.add_argument('--ALPHA', default=0.1, type=float, help='The learning rate')
-parser.add_argument('--LAMBDA', default=0.5, type=float, help='The discount factor')
+parser.add_argument('--LAMBDA', default=0.9, type=float, help='The discount factor')
 parser.add_argument('--store_step', default=100, type=int, help='number of steps per storation, store the data from target network')
 #=======================================================================================================================
 # DQN Parameters
