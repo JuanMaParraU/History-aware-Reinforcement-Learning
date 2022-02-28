@@ -3,13 +3,11 @@ import math
 import json
 from json import JSONEncoder
 import torch
-#import pymongo
 import argparse
 import random
 import models
 from models import Q_Learning
 import pandas as pd
-#from pymongo import MongoClient
 from pandas import DataFrame,Series
 import matplotlib.pyplot as plt, time
 from matplotlib.patches import Circle
@@ -27,7 +25,7 @@ parser.add_argument('--length', default=100, type=int, help='The length of the a
 parser.add_argument('--width', default=100, type=int, help='The width of the area(meter)')
 parser.add_argument('--resolution', default=10, type=int, help='The Resolution (meter)')
 parser.add_argument('--episode', default=2, type=int, help='The number turns it plays')
-parser.add_argument('--step', default=1000, type=int, help='The number of steps for any turn of runs')
+parser.add_argument('--step', default=200, type=int, help='The number of steps for any turn of runs')
 parser.add_argument('--action_space', default=['east','west','south','north','stay'], type=list, help='The avaliable states')
 parser.add_argument('--EPSILON', default=0.9, type=float, help='The greedy policy')
 parser.add_argument('--ALPHA', default=0.3, type=float, help='The learning rate')
@@ -61,19 +59,6 @@ def generate_dict_from_array(array, name):
         data += " )"
         dict [name + " " + str(i)] = data
     return copy.deepcopy(dict)
-
-
-
-def refreash_dataset(name = args.database_name, collection_name = args.collection_name, host='localhost', port=27017):
-    mongo_client = MongoClient(host, port) # 创建 MongoClient 对象，（string格式，int格式）
-    mongo_db = mongo_client[name] # MongoDB 中可存在多个数据库，根据数据库名称获取数据库对象（Database）
-    #mongo_db.authenticate(mongodb_user, mongodb_passwd) # 登录认证
-    for collection in mongo_db.collection_names():
-        print ('collection: ', collection, ' have been refreshed')
-        db_collection=mongo_db[collection] # 每个数据库包含多个集合，根据集合名称获取集合对象（Collection）
-        # drop = db_collection.drop() delate
-        remove = db_collection.remove()
-        #drop = db_collection.drop()
 
 def environment_setup():
     np.random.seed(args.random_seed)
@@ -211,52 +196,6 @@ def save_Q_table_mqtt(table, SINR, initial_real_reword, action, dronePos, episod
     drone_dict['reward'] = initial_real_reword
     mqttClient.publish(topic_name, str(data))
 
-def save_initial_settling(U_p, D_p, name = args.database_name, collection_name ='initial_setting', host='localhost', port=27017):
-    myclient = pymongo.MongoClient(host='localhost', port=27017)
-    mydb = myclient[name]
-    dblist = myclient.list_database_names()
-    collection = mydb[collection_name]
-    initial_info = {}
-    initial_info ['random_seed'] = args.random_seed
-    initial_info ['num_drones'] = args.numDrones
-    initial_info ['num_users'] = args.numUsers
-    initial_info ['user_positions'] = generate_dict_from_array(U_p, "user")
-    initial_info ['drone_positions'] = generate_dict_from_array(D_p, 'drone')
-    initial_info ['carrier_frequency'] = args.fc
-    initial_info ['transmit_power'] = args.Pt
-    initial_info ['sinr_threshold'] = args.connectThresh
-    initial_info ['drone_user_capacity'] = 'not consider yet'
-    initial_info ['x_min'] = 0
-    initial_info ['x_max'] = args.width
-    initial_info ['y_min'] = 0
-    initial_info ['y_max'] = args.length
-    initial_info ['possible_actions'] = [[1,0],[-1,0],[0,1],[0,-1],[0,0]]
-    initial_info ['learning_rate'] = args.ALPHA
-    initial_info ['total_episodes'] = args.episode
-    initial_info ['iterations_per_episode'] = args.step
-    initial_info ['discount_factor'] = args.LAMBDA
-    initial_info ['episodes'] = 'total if possible'
-    result = collection.insert(initial_info)
-
-def save_Q_table(table, SINR, initial_real_reword, action, dronePos, episode, step, drone, name , collection_name, host='localhost', port=27017):
-    myclient = pymongo.MongoClient(host='localhost', port=27017)
-    mydb = myclient[name]
-    dblist = myclient.list_database_names()
-    data = {}
-    epoch_dict = data['episode: ' + episode] = {}
-    step_dict = epoch_dict['step: ' + step] = {}
-    drone_dict = step_dict ['drone number: ' + drone] = {}
-    for i in table[int(drone)].index:
-        drone_dict['position: ' + i] = {}
-        for j in table[int(drone)].columns:
-            drone_dict['position: ' + i][j] = table[int(drone)].loc[i, j]
-    drone_dict['SINR'] = generate_dict_from_array( SINR, 'user')
-    drone_dict['state'] = generate_dict_from_array(dronePos, 'drone')
-    drone_dict['action'] = action
-    drone_dict['reword'] = initial_real_reword
-    collection = mydb[collection_name]
-    result = collection.insert(data)
-
 def theoretical_performance(userPos, num):
     max = 0
     average = 0
@@ -311,11 +250,10 @@ def main(args):
                 print('episode', i,' with average reward:', total/counter)
             reword_table[k,j] = rewords
         count += [total/counter]
-       # np.save('Log/reword_episod_' + str(i)+ '.npy', count)
         print (count)
         print(Q_table)
         print(dronePos)
-
+    np.save('results_qlearning.npy', count)
 
 if __name__ == "__main__":
     main(args)
