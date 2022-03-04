@@ -30,7 +30,7 @@ parser.add_argument('--action_space', default=['east', 'west', 'south', 'north',
                     help='The avaliable states')
 parser.add_argument('--EPSILON', default=0.9, type=float, help='The greedy policy')
 parser.add_argument('--ALPHA', default=0.3, type=float, help='The learning rate')
-parser.add_argument('--LAMBDA', default=0.9, type=float, help='The discount factor')
+parser.add_argument('--LAMBDA', default=0.99, type=float, help='The discount factor')
 #=======================================================================================================================
 # Signal Attenuation Parameters
 parser.add_argument('--connectThresh', default=40, type=int, help='Threshold')
@@ -285,10 +285,12 @@ def main(args):
                 print('episode', i, ' with average reward:', total / counter)
             reword_table[k, j] = rewords
         count += [total / counter]
+        if (i+1)%10==0:
+            Lambda=Lambda-0.1
+            print('The new lambda is: '+ str(Lambda))
         print(count)
-        #print(Q_table)
         print(dronePos)
-    np.save('results_qlearning_4drones.npy', count)
+    np.save('results_qlearning_4drones_grid_search.npy', count)
 
 if __name__ == "__main__":
     main(args)
