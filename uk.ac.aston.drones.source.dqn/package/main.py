@@ -25,7 +25,7 @@ import sys, json
 import os
 #from builtins import False
 os.environ["CUDA_DEVICES_ORDER"]="PCI_BUS_IS"
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+os.environ["CUDA_VISIBLE_DEVICES"]="4"
 parser = argparse.ArgumentParser(description='Reinforce Learning')
 #=======================================================================================================================
 # Environment Parameters
@@ -364,13 +364,7 @@ def main(args):
     dcounts = []
     pos = []
     store_length = []
-    Lambda = args.LAMBDA
-    gama = []
-    down = 0.1
-    MaxR = 0
-    MaxGama = 0
-    flag = 0
-    last = -1
+    Lambda=random.random()
     for i in range(args.numDrones):
         dcounts.append([])
         pos.append([])
@@ -511,7 +505,6 @@ def main(args):
         np.save('episode_' + str(i) + 'Stop-pos.npy', dronePos)
         np.save('reward' + '_episode_' + str(i) + '.npy', counts)
 if __name__ == "__main__":
-    os.environ["CUDA_VISIBLE_DEVICES"]="4,5"
     isMessageReceived = False
     message = " "
     main(args)

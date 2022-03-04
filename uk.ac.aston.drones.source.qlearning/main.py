@@ -286,11 +286,11 @@ def main(args):
             reword_table[k, j] = rewords
         count += [total / counter]
         if (i+1)%10==0:
-            Lambda=Lambda-0.1
+            Lambda= np.random.rand()
             print('The new lambda is: '+ str(Lambda))
         print(count)
         print(dronePos)
-    np.save('results_qlearning_4drones_grid_search.npy', count)
+    np.save('results_qlearning_4drones_random_search.npy', count)
 
 if __name__ == "__main__":
     main(args)
