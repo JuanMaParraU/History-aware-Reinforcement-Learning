@@ -244,6 +244,7 @@ def environment_setup(i):
 def on_connect(client, userdata, flags, rc):
     code = rc
     #print('CONNACK received with code %d.' % (rc))
+    client.subscribe("Q_table_collection_feedbackEtemox.json")
 
 def on_message(client, userdata, msg):
     global isMessageReceived 
@@ -255,6 +256,10 @@ def on_message(client, userdata, msg):
 def on_log(client, userdata, level, buf):
     global log
     log = buf
+
+def on_disconnect(client, userdata, rc):
+    if rc != 0:
+        print("Unexpected MQTT disconnection. Will auto-reconnect")
 
 def save_initial_settings_mqtt(U_p, D_p, userPos_XY, topic_name =args.initial_param_topic, host=args.mqttBroker, port=args.port):
     mqttClient=mqtt.Client(client_id="ETeMoXServer")
@@ -389,9 +394,9 @@ def main(args):
     mqttClient=mqtt.Client()
     mqttClient.on_connect = on_connect
     mqttClient.on_message = on_message
+    mqttClient.on_disconnect = on_disconnect
     mqttClient.connect('broker.mqttdashboard.com', 1883)
     mqttClient.loop_start()
-    mqttClient.subscribe("Q_table_collection_feedbackEtemox.json")
     dronePos, userPos, distribution, u = environment_setup(0)
     for i in range(args.episode):
         total = 0
@@ -504,6 +509,7 @@ def main(args):
             print('drone' + str(drone_No) + ' rewards:', dcounts[drone_No])        
         np.save('episode_' + str(i) + 'Stop-pos.npy', dronePos)
         np.save('reward' + '_episode_' + str(i) + '.npy', counts)
+        mqttClient.loop_stop()
 if __name__ == "__main__":
     isMessageReceived = False
     message = " "
