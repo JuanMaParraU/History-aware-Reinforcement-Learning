@@ -244,7 +244,6 @@ def environment_setup(i):
 def on_connect(client, userdata, flags, rc):
     code = rc
     #print('CONNACK received with code %d.' % (rc))
-    client.subscribe("Q_table_collection_feedbackEtemox.json")
 
 def on_message(client, userdata, msg):
     global isMessageReceived 
@@ -343,12 +342,20 @@ def grasp_data_for_training(Store_transition, count, eval_network, target_networ
         action = Store[dict]['action']
         state = torch.from_numpy(np.array([(np.swapaxes(np.swapaxes(state,0,2),1,2)).astype(np.float32)]))
         state_ = torch.from_numpy(np.array([(np.swapaxes(np.swapaxes(state_,0,2),1,2)).astype(np.float32)]))
-        if k == 0:
-            Q_eval = torch.unsqueeze(eval_network(state.cuda())[0][action],0)
-            Q_next = target_network(state_.cuda())
+        if cf.use_cuda:
+            if k == 0:
+                Q_eval = torch.unsqueeze(eval_network(state.cuda())[0][action],0)
+                Q_next = target_network(state_.cuda())
+            else:
+                Q_eval = torch.cat([Q_eval,torch.unsqueeze(eval_network(state.cuda())[0][action],0)],dim=0)
+                Q_next = torch.cat([Q_next,target_network(state_.cuda())],dim=0)
         else:
-            Q_eval = torch.cat([Q_eval,torch.unsqueeze(eval_network(state.cuda())[0][action],0)],dim=0)
-            Q_next = torch.cat([Q_next,target_network(state_.cuda())],dim=0)
+            if k == 0:
+                Q_eval = torch.unsqueeze(eval_network(state.cpu())[0][action],0)
+                Q_next = target_network(state_.cpu())
+            else:
+                Q_eval = torch.cat([Q_eval,torch.unsqueeze(eval_network(state.cpu())[0][action],0)],dim=0)
+                Q_next = torch.cat([Q_next,target_network(state_.cpu())],dim=0)
         r_ = np.append(r_,r/1050.0)
         action_ = np.append(action_,action)
         k = k + 1
@@ -396,6 +403,7 @@ def main(args):
     mqttClient.on_message = on_message
     mqttClient.on_disconnect = on_disconnect
     mqttClient.connect('broker.mqttdashboard.com', 1883)
+    mqttClient.subscribe("Q_table_collection_feedbackEtemox.json", 2)
     mqttClient.loop_start()
     dronePos, userPos, distribution, u = environment_setup(0)
     for i in range(args.episode):
@@ -452,9 +460,12 @@ def main(args):
                 observation_seq_adjust_ = (np.swapaxes(np.swapaxes(observation_seq_,0,2),1,2)).astype(np.float32)                      
                 Store_transition[drone_No] = save_data_for_training(Store_transition[drone_No], count[drone_No], observation_seq, action_adjust, reward_['total'], observation_seq_)
                 count[drone_No] += 1
-                save_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, Lambda, dronePos, i, j, drone_No)
+                #save_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, Lambda, dronePos, i, j, drone_No)
                 Q_eval, re, action, Q_next = grasp_data_for_training(Store_transition[drone_No], count[drone_No], eval_network[drone_No], target_network[drone_No])
-                loss = DQN.pred_loss(torch.from_numpy(re.astype(np.float32)).cuda(), Q_next, Q_eval, Lambda)
+                if cf.use_cuda:
+                    loss = DQN.pred_loss(torch.from_numpy(re.astype(np.float32)).cuda(), Q_next, Q_eval, Lambda)
+                else:
+                    loss = DQN.pred_loss(torch.from_numpy(re.astype(np.float32)).cpu(), Q_next, Q_eval, Lambda)
                 optimizer_eval[drone_No].zero_grad()
                 loss.backward(retain_graph=True)
                 optimizer_eval[drone_No].step() 
