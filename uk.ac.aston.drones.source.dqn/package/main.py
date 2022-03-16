@@ -42,7 +42,7 @@ parser.add_argument('--interval', default=200, type=int, help='The interval betw
 parser.add_argument('--action_space', default=['east','west','south','north','stay'], type=list, help='The avaliable states')
 parser.add_argument('--EPSILON', default=0.9, type=float, help='The greedy policy')
 parser.add_argument('--ALPHA', default=0.1, type=float, help='The learning rate')
-parser.add_argument('--LAMBDA', default=0.1, type=float, help='The discount factor')
+parser.add_argument('--LAMBDA', default=0.7, type=float, help='The discount factor')
 parser.add_argument('--store_step', default=100, type=int, help='number of steps per storation, store the data from target network')
 #=======================================================================================================================
 # DQN Parameters
@@ -294,7 +294,7 @@ def save_initial_settings_mqtt(U_p, D_p, userPos_XY, topic_name =args.initial_pa
     print('published')
     mqttClient.loop_stop()
 
-def save_predicted_Q_table_mqtt(client,observation_seq, SINR, predicted_table, action, reward,lambdaVar, dronePos, episode, step, drone, topic_name = args.q_table_topic, host=args.mqttBroker, port=args.port):
+def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, reward,lambdaVar, dronePos, episode, step, drone, topic_name = args.q_table_topic, host=args.mqttBroker, port=args.port):
     #mqttClient=mqtt.Client(client_id="PublisherQTable")
     #mqttClient.on_connect = on_connect
     #mqttClient.on_message = on_message
@@ -313,8 +313,8 @@ def save_predicted_Q_table_mqtt(client,observation_seq, SINR, predicted_table, a
     drone_dict['state'] = generate_dict_from_array(dronePos, 'drone')
     drone_dict['action'] = action
     drone_dict['reward'] = reward
-    client.publish(topic_name, str(data),qos=1)
-    client.loop_stop()
+    mqttClient.publish(topic_name, str(data),qos=1)
+    #mqttClient.loop_stop()
     
 def save_data_for_training(Store_transition, count, observation_seq_adjust, action_adjust, reward_, observation_seq_adjust_):
     Store_transition[count%args.store_step] = {}
@@ -398,6 +398,7 @@ def main(args):
 
     # =============================================== start up =========================================================
     counts = []
+    global mqttClient
     mqttClient=mqtt.Client()
     mqttClient.on_connect = on_connect
     mqttClient.on_message = on_message
@@ -449,7 +450,7 @@ def main(args):
                 else:
                     action_reward = target_network[drone_No](torch.from_numpy(np.array([observation_seq_adjust])))
                 # ================================ greedy actions ======================================================
-                if random.random() < args.EPSILON:
+                if random.random() < args.EPßSILON:
                     action_adjust = (torch.argmax(action_reward)).detach().numpy()
                 else:
                     action_adjust = np.array(sample([i for i in range(len(args.action_space))], 1)[0])
@@ -460,7 +461,7 @@ def main(args):
                 observation_seq_adjust_ = (np.swapaxes(np.swapaxes(observation_seq_,0,2),1,2)).astype(np.float32)                      
                 Store_transition[drone_No] = save_data_for_training(Store_transition[drone_No], count[drone_No], observation_seq, action_adjust, reward_['total'], observation_seq_)
                 count[drone_No] += 1
-                save_predicted_Q_table_mqtt(mqttClient,observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, Lambda, dronePos, i, j, drone_No)
+                save_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, Lambda, dronePos, i, j, drone_No)
                 Q_eval, re, action, Q_next = grasp_data_for_training(Store_transition[drone_No], count[drone_No], eval_network[drone_No], target_network[drone_No])
                 if cf.use_cuda:
                     loss = DQN.pred_loss(torch.from_numpy(re.astype(np.float32)).cuda(), Q_next, Q_eval, Lambda)
@@ -508,8 +509,8 @@ def main(args):
                 print('episode', i,' with average reward:', total/counter)
                 for drone_No in range(args.numDrones):
                     print('episode', str(i),'drone' + str(drone_No) + ' with average reward:', dtotal[drone_No]/counter)
-        #if (i+1)%10==0:
-         #   Lambda=random.random()
+        #if (i+1)%25==0:
+         #   Lambda=Lambda-0.2
           #  print('The new lambda is: '+ str(Lambda))
         counts += [total / counter]
         print('All episodes rewards:', counts)
