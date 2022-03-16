@@ -42,7 +42,7 @@ parser.add_argument('--interval', default=200, type=int, help='The interval betw
 parser.add_argument('--action_space', default=['east','west','south','north','stay'], type=list, help='The avaliable states')
 parser.add_argument('--EPSILON', default=0.9, type=float, help='The greedy policy')
 parser.add_argument('--ALPHA', default=0.1, type=float, help='The learning rate')
-parser.add_argument('--LAMBDA', default=0.7, type=float, help='The discount factor')
+parser.add_argument('--LAMBDA', default=0.8, type=float, help='The discount factor')
 parser.add_argument('--store_step', default=100, type=int, help='number of steps per storation, store the data from target network')
 #=======================================================================================================================
 # DQN Parameters
@@ -513,13 +513,15 @@ def main(args):
             print('The new lambda is: '+ str(Lambda))
         counts += [total / counter]
         print('All episodes rewards:', counts)
-        np.save('rewards\\reward_episod_' + str(i) + '.npy', counts)
+        np.save('rewards\\reward_episod_final08.npy', counts)
+        '''
         for drone_No in range(args.numDrones):
             dcounts[drone_No] += [dtotal[drone_No] / counter]
             np.save('drone' + str(drone_No) +'_episode_99.npy', dcounts[drone_No])
             print('drone' + str(drone_No) + ' rewards:', dcounts[drone_No])        
         np.save('episode_' + str(i) + 'Stop-pos.npy', dronePos)
         np.save('reward' + '_episode_' + str(i) + '.npy', counts)
+        '''
         mqttClient.loop_stop()
 if __name__ == "__main__":
     isMessageReceived = False
