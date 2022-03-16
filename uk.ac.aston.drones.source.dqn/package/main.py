@@ -450,7 +450,7 @@ def main(args):
                 else:
                     action_reward = target_network[drone_No](torch.from_numpy(np.array([observation_seq_adjust])))
                 # ================================ greedy actions ======================================================
-                if random.random() < args.EPßSILON:
+                if random.random() < args.EPSILON:
                     action_adjust = (torch.argmax(action_reward)).detach().numpy()
                 else:
                     action_adjust = np.array(sample([i for i in range(len(args.action_space))], 1)[0])
