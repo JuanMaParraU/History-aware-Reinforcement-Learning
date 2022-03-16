@@ -294,13 +294,13 @@ def save_initial_settings_mqtt(U_p, D_p, userPos_XY, topic_name =args.initial_pa
     print('published')
     mqttClient.loop_stop()
 
-def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, reward,lambdaVar, dronePos, episode, step, drone, topic_name = args.q_table_topic, host=args.mqttBroker, port=args.port):
-    mqttClient=mqtt.Client(client_id="PublisherQTable")
-    mqttClient.on_connect = on_connect
-    mqttClient.on_message = on_message
-    mqttClient.on_log = on_log
-    mqttClient.connect_async(host, port)
-    mqttClient.loop_start()
+def save_predicted_Q_table_mqtt(client,observation_seq, SINR, predicted_table, action, reward,lambdaVar, dronePos, episode, step, drone, topic_name = args.q_table_topic, host=args.mqttBroker, port=args.port):
+    #mqttClient=mqtt.Client(client_id="PublisherQTable")
+    #mqttClient.on_connect = on_connect
+    #mqttClient.on_message = on_message
+    #mqttClient.on_log = on_log
+    #mqttClient.connect_async(host, port)
+    #mqttClient.loop_start()
     data = {}
     data['episode']=episode
     data['step'] = step
@@ -313,8 +313,8 @@ def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, 
     drone_dict['state'] = generate_dict_from_array(dronePos, 'drone')
     drone_dict['action'] = action
     drone_dict['reward'] = reward
-    mqttClient.publish(topic_name, str(data),qos=1)
-    mqttClient.loop_stop()
+    client.publish(topic_name, str(data),qos=1)
+    client.loop_stop()
     
 def save_data_for_training(Store_transition, count, observation_seq_adjust, action_adjust, reward_, observation_seq_adjust_):
     Store_transition[count%args.store_step] = {}
@@ -460,7 +460,7 @@ def main(args):
                 observation_seq_adjust_ = (np.swapaxes(np.swapaxes(observation_seq_,0,2),1,2)).astype(np.float32)                      
                 Store_transition[drone_No] = save_data_for_training(Store_transition[drone_No], count[drone_No], observation_seq, action_adjust, reward_['total'], observation_seq_)
                 count[drone_No] += 1
-                #save_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, Lambda, dronePos, i, j, drone_No)
+                save_predicted_Q_table_mqtt(mqttClient,observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, Lambda, dronePos, i, j, drone_No)
                 Q_eval, re, action, Q_next = grasp_data_for_training(Store_transition[drone_No], count[drone_No], eval_network[drone_No], target_network[drone_No])
                 if cf.use_cuda:
                     loss = DQN.pred_loss(torch.from_numpy(re.astype(np.float32)).cuda(), Q_next, Q_eval, Lambda)
