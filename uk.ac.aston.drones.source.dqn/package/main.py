@@ -295,12 +295,12 @@ def save_initial_settings_mqtt(U_p, D_p, userPos_XY, topic_name =args.initial_pa
     mqttClient.loop_stop()
 
 def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, reward,lambdaVar, dronePos, episode, step, drone, topic_name = args.q_table_topic, host=args.mqttBroker, port=args.port):
-    #mqttClient=mqtt.Client(client_id="PublisherQTable")
-    #mqttClient.on_connect = on_connect
-    #mqttClient.on_message = on_message
-    #mqttClient.on_log = on_log
-    #mqttClient.connect_async(host, port)
-    #mqttClient.loop_start()
+    mqttClient=mqtt.Client(client_id="PublisherQTable")
+    mqttClient.on_connect = on_connect
+    mqttClient.on_message = on_message
+    mqttClient.on_log = on_log
+    mqttClient.connect_async(host, port)
+    mqttClient.loop_start()
     data = {}
     data['episode']=episode
     data['step'] = step
@@ -314,7 +314,7 @@ def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, 
     drone_dict['action'] = action
     drone_dict['reward'] = reward
     mqttClient.publish(topic_name, str(data),qos=1)
-    #mqttClient.loop_stop()
+    mqttClient.loop_stop()
     
 def save_data_for_training(Store_transition, count, observation_seq_adjust, action_adjust, reward_, observation_seq_adjust_):
     Store_transition[count%args.store_step] = {}
@@ -398,7 +398,6 @@ def main(args):
 
     # =============================================== start up =========================================================
     counts = []
-    global mqttClient
     mqttClient=mqtt.Client()
     mqttClient.on_connect = on_connect
     mqttClient.on_message = on_message
@@ -509,9 +508,9 @@ def main(args):
                 print('episode', i,' with average reward:', total/counter)
                 for drone_No in range(args.numDrones):
                     print('episode', str(i),'drone' + str(drone_No) + ' with average reward:', dtotal[drone_No]/counter)
-        #if (i+1)%25==0:
-         #   Lambda=Lambda-0.2
-          #  print('The new lambda is: '+ str(Lambda))
+        if (i+1)%25==0:
+            Lambda=Lambda-0.2
+            print('The new lambda is: '+ str(Lambda))
         counts += [total / counter]
         print('All episodes rewards:', counts)
         np.save('rewards\\reward_episod_' + str(i) + '.npy', counts)
