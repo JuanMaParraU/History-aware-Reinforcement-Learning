@@ -24,6 +24,8 @@ import copy
 from random import sample
 import json
 import os
+import paho.mqtt.client as mqtt
+from paho.mqtt.subscribe import _on_connect
 os.environ["CUDA_DEVICES_ORDER"]="PCI_BUS_IS"
 os.environ["CUDA_VISIBLE_DEVICES"]="5"
 
@@ -63,11 +65,11 @@ parser.add_argument('--BW', default=200e3, type=int, help='The bandwidth')
 parser.add_argument('--N0', default=10**(-20.4), type=float, help='The N0')
 parser.add_argument('--SIGMA', default=20, type=int, help='The SIGMA')
 #=======================================================================================================================
-# Database Parameters
-parser.add_argument('--database_name', default='DQN_Data_Base', type=str, help='The name of database')
-parser.add_argument('--collection_name', default='Q_table_collection', type=str, help='The name of the collection')
-parser.add_argument('--host', default='localhost', type=str, help='The host type')
-parser.add_argument('--mongodb_port', default=27017, type=int, help='The port of database')
+# Mqtt Parameters
+parser.add_argument('--mqttBroker', default='broker.mqttdashboard.com', type=str, help='The mqtt broker url, e.g 127.0.0.1')
+parser.add_argument('--q_table_topic', default='Q_table_collection.json', type=str, help='The name of the main topic')
+parser.add_argument('--port', default=1883, type=int, help='The mqtt port')
+parser.add_argument('--initial_param_topic', default='initial_setting.json', type=str, help='The name of the topic for the initial parameters')
 
 args = parser.parse_args()
 sarsa = SARSA(args)
@@ -234,24 +236,32 @@ def environment_setup(i):
     #save_initial_settling(userPos,dronePos)
     return dronePos, userPos, distribution, u
 
+def on_connect(client, userdata, flags, rc):
+    code = rc
+    #print('CONNACK received with code %d.' % (rc))
 
-def refreash_dataset(name = args.database_name, collection_name = args.collection_name, host='localhost', port=27017):
-    mongo_client = MongoClient(host, port) # 创建 MongoClient 对象，（string格式，int格式）
-    mongo_db = mongo_client[name] # MongoDB 中可存在多个数据库，根据数据库名称获取数据库对象（Database）
-    #mongo_db.authenticate(mongodb_user, mongodb_passwd) # 登录认证
-    for collection in mongo_db.collection_names():
-        print ('collection: ', collection, ' have been refreshed')
-        db_collection=mongo_db[collection] # 每个数据库包含多个集合，根据集合名称获取集合对象（Collection）
-        # drop = db_collection.drop() delate
-        remove = db_collection.remove()
-        #drop = db_collection.drop()
+def on_message(client, userdata, msg):
+    global isMessageReceived
+    isMessageReceived = True
+    global message
+    message = str(msg.payload)
+    #print(msg.topic+" "+str(msg.payload))
 
+def on_log(client, userdata, level, buf):
+    global log
+    log = buf
 
-def save_initial_settling(U_p, D_p, name = args.database_name, collection_name ='initial_setting', host='localhost', port=27017):
-    myclient = pymongo.MongoClient(host='localhost', port=27017)
-    mydb = myclient[name]
-    dblist = myclient.list_database_names()
-    collection = mydb[collection_name]
+def on_disconnect(client, userdata, rc):
+    if rc != 0:
+        print("Unexpected MQTT disconnection. Will auto-reconnect")
+
+def save_initial_settings_mqtt(U_p, D_p, userPos_XY, topic_name =args.initial_param_topic, host=args.mqttBroker, port=args.port):
+    mqttClient=mqtt.Client(client_id="ETeMoXServer")
+    mqttClient.on_connect = on_connect
+    mqttClient.on_log = on_log
+    mqttClient.connect(host, port)
+    print(host,port)
+    mqttClient.loop_start()
     initial_info = {}
     initial_info ['random_seed'] = args.random_seed
     initial_info ['num_drones'] = args.numDrones
@@ -272,26 +282,34 @@ def save_initial_settling(U_p, D_p, name = args.database_name, collection_name =
     initial_info ['iterations_per_episode'] = args.step
     initial_info ['discount_factor'] = args.LAMBDA
     initial_info ['episodes'] = 'total if possible'
-    result = collection.insert(initial_info)
+    print('here')
+    mqttClient.publish(topic_name, str(initial_info))
+    userPos_XY = str(userPos_XY).replace("\'","\"")
+    mqttClient.publish('users_pos_ini', str(userPos_XY),qos=1)
+    print('published')
+    mqttClient.loop_stop()
 
-def save_predicted_Q_table(observation_seq, SINR, predicted_table, action, reward_, dronePos, episode, step, drone, name , collection_name, host='localhost', port=27017):
-    myclient = pymongo.MongoClient(host='localhost', port=27017)
-    mydb = myclient[name]
-    dblist = myclient.list_database_names()
+def save_predicted_Q_table_mqtt(observation_seq, SINR, predicted_table, action, reward,lambdaVar, dronePos, episode, step, drone, topic_name = args.q_table_topic, host=args.mqttBroker, port=args.port):
+    mqttClient=mqtt.Client(client_id="PublisherQTable")
+    mqttClient.on_connect = on_connect
+    mqttClient.on_message = on_message
+    mqttClient.on_log = on_log
+    mqttClient.connect_async(host, port)
+    mqttClient.loop_start()
     data = {}
     data['episode']=episode
     data['step'] = step
-    data['drone number']=drone
+    data['drone_number']=drone
+    data['lambda']=lambdaVar
     drone_dict = data ['qtable'] = {}
     drone_dict['position: (' + str(dronePos[int(drone),0])+', '+str(dronePos[int(drone),1])+')'] = {}
     drone_dict['position: (' + str(dronePos[int(drone),0])+', '+str(dronePos[int(drone),1])+')'] = generate_pre_Q_dict_from_array(predicted_table.T)
     drone_dict['SINR'] = generate_dict_from_array( SINR, 'user')
     drone_dict['state'] = generate_dict_from_array(dronePos, 'drone')
     drone_dict['action'] = action
-    drone_dict['reward'] = reward_
-    collection = mydb[collection_name]
-    result = collection.insert(data)
-    #print(result)
+    drone_dict['reward'] = reward
+    mqttClient.publish(topic_name, str(data),qos=1)
+    mqttClient.loop_stop()
 
 def save_data_for_training(Store_transition, count, observation_seq_adjust, action_adjust, reward_, observation_seq_adjust_):
     Store_transition[count%100] = {}
@@ -340,12 +358,20 @@ def main(args):
     optimizer_target = []
     target_network = []
     dcounts = []
-    Lambda = 0.5
+    Lambda = args.LAMBDA
     gama = []
     TotalMax = []
     TotalMin = []
     EachMax = []
     EachMin = []
+    prevWinAvg = 0
+    currentWinAvg = 0
+    maxWinAvg = 0
+    maxLambda = 0
+    thershold = 30
+    window_size = 3
+    tune_flag = 0
+    stride_lambda = 0.1
     for i in range(args.numDrones):
         dcounts.append([])
         EachMax.append([])
@@ -474,6 +500,29 @@ def main(args):
         np.save('TotalMin.npy',TotalMin)
         np.save('EachMin.npy',EachMin)
         np.save('EachMax.npy',EachMax)
+        #============================================Hyperparameter tuning===========================
+        if(i+1)%window_size==0: #Time window of 3 episodes
+            print("Episodes are: "+i+", "+i-1+", "+i-2)
+            print("Rewards are: "+counts[i]+", "+counts[i-1]+", "+counts[i-2])
+            currentWinAvg = (counts[i]+counts[i-1]+counts[i-2])/window_size
+            print("The reward by time window is: "+currentWinAvg)
+            # IsStable?
+            if(abs(counts[i] - currentWinAvg)<thershold and
+                abs(counts[i-1] - currentWinAvg) < thershold and
+                abs(counts[i-2] - currentWinAvg) < thershold
+            ):
+                print("it is stable now continue with tuning")
+                if(currentWinAvg>prevWinAvg): #it is still learning, the hyperparamater should continue fixed
+                    maxWinAvg = currentWinAvg # we record the maximum value of reward per time-window
+                    maxLambda = Lambda # no change
+                    tune_flag = random.randint(0, 2)
+                else: # now we update the hyperparamenter
+                    if(tune_flag==0):
+                        Lambda=Lambda-stride_lambda
+                    elif(tune_flag==1):
+                        Lambda=Lambda+stride_lambda
+                    else:
+                        Lambda= round(random.uniform(0,1), 2)
     np.save('gama.npy',gama)
 if __name__ == "__main__":
     main(args)
