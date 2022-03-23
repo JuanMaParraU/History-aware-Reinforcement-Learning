@@ -472,8 +472,8 @@ def main(args):
                 #print('Epoch [{}/{}], Step [{}/{}], Loss: {:.4f}'.format(i + 1, args.episode, j + 1, args.step, loss.item()))
                 #torch.save(eval_network[drone_No].state_dict(), 'Network Parameters\\' + str(drone_No) + 'th_eval_network_parameters')
                 if count[drone_No] % args.interval == 0 and flagForStop == False:
-                    torch.save(eval_network[drone_No].state_dict(), 'Network Parameters\\' + str(drone_No) + 'th_eval_network_parameters')
-                    target_network[drone_No].load_state_dict(torch.load('Network Parameters\\' + str(drone_No) + 'th_eval_network_parameters'))
+                    torch.save(eval_network[drone_No].state_dict(), 'Network Parameters\\' + str(drone_No) + 'th_eval_network_parameters1')
+                    target_network[drone_No].load_state_dict(torch.load('Network Parameters\\' + str(drone_No) + 'th_eval_network_parameters1'))
                     print('Drone' + str(drone_No) + ' updated')
                     print ('Network Parameters\\' + str(count) + 'th_eval_network_parameters is successfully load to the target network')                    
                 if isMessageReceived and 'Pause_Drone' in message:
