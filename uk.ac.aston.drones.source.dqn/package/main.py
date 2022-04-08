@@ -24,8 +24,8 @@ from paho.mqtt.subscribe import _on_connect
 import sys, json
 import os
 #from builtins import False
-os.environ["CUDA_DEVICES_ORDER"]="PCI_BUS_IS"
-os.environ["CUDA_VISIBLE_DEVICES"]="4"
+#os.environ["CUDA_DEVICES_ORDER"]="PCI_BUS_IS"
+#os.environ["CUDA_VISIBLE_DEVICES"]="4"
 parser = argparse.ArgumentParser(description='Reinforce Learning')
 #=======================================================================================================================
 # Environment Parameters
@@ -46,7 +46,7 @@ parser.add_argument('--LAMBDA', default=0.8, type=float, help='The discount fact
 parser.add_argument('--store_step', default=100, type=int, help='number of steps per storation, store the data from target network')
 #=======================================================================================================================
 # DQN Parameters
-parser.add_argument('--lr', default=0.005, type=float, help='The learning rate for CNN')
+parser.add_argument('--lr', default=0.001, type=float, help='The learning rate for CNN')
 parser.add_argument('--drop_rate', default=0.5, type=float, help='The drop out rate for CNN')
 parser.add_argument('--iteration', default=1, type=int, help='The number of data per train')
 parser.add_argument('--sequence_len', default=10, type=int, help='The number of observations in a sequence')
@@ -460,7 +460,7 @@ def main(args):
                 observation_seq_adjust_ = (np.swapaxes(np.swapaxes(observation_seq_,0,2),1,2)).astype(np.float32)                      
                 Store_transition[drone_No] = save_data_for_training(Store_transition[drone_No], count[drone_No], observation_seq, action_adjust, reward_['total'], observation_seq_)
                 count[drone_No] += 1
-                #ßsave_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, Lambda, dronePos, i, j, drone_No)
+                save_predicted_Q_table_mqtt(observation_seq, SINR, action_reward.detach().numpy(), args.action_space[action_adjust], reward_, Lambda, dronePos, i, j, drone_No)
                 Q_eval, re, action, Q_next = grasp_data_for_training(Store_transition[drone_No], count[drone_No], eval_network[drone_No], target_network[drone_No])
                 if cf.use_cuda:
                     loss = DQN.pred_loss(torch.from_numpy(re.astype(np.float32)).cuda(), Q_next, Q_eval, Lambda)
@@ -508,9 +508,6 @@ def main(args):
                 print('episode', i,' with average reward:', total/counter)
                 for drone_No in range(args.numDrones):
                     print('episode', str(i),'drone' + str(drone_No) + ' with average reward:', dtotal[drone_No]/counter)
-        if (i+1)%25==0:
-            Lambda=Lambda-0.2
-            print('The new lambda is: '+ str(Lambda))
         counts += [total / counter]
         print('All episodes rewards:', counts)
         np.save('rewards\\reward_episod_final08.npy', counts)
@@ -524,6 +521,7 @@ def main(args):
         '''
         mqttClient.loop_stop()
 if __name__ == "__main__":
+    torch.cuda.empty_cache()
     isMessageReceived = False
     message = " "
     main(args)

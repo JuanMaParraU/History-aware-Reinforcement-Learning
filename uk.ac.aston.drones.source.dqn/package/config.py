@@ -1,1 +1,1 @@
-use_cuda = False
+use_cuda = True
