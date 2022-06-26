@@ -61,7 +61,7 @@ parser.add_argument('--N0', default=10**(-20.4), type=float, help='The N0')
 parser.add_argument('--SIGMA', default=20, type=int, help='The SIGMA')
 #=======================================================================================================================
 # Mqtt Parameters
-parser.add_argument('--mqttBroker', default='broker.mqttdashboard.com', type=str, help='The mqtt broker url, e.g 127.0.0.1')
+parser.add_argument('--mqttBroker', default='localhost', type=str, help='The mqtt broker url, e.g 127.0.0.1')
 parser.add_argument('--q_table_topic', default='Q_table_collection.json', type=str, help='The name of the main topic')
 parser.add_argument('--port', default=1883, type=int, help='The mqtt port')
 parser.add_argument('--initial_param_topic', default='initial_setting.json', type=str, help='The name of the topic for the initial parameters')
@@ -395,14 +395,13 @@ def main(args):
         param_target.append(list(target_network[i].parameters()))
         optimizer_target.append(optim.SGD(param_target[i], lr=args.lr, momentum=0.9, weight_decay=1e-3))
     pred_loss = nn.MSELoss(reduction='mean')
-
     # =============================================== start up =========================================================
     counts = []
     mqttClient=mqtt.Client()
     mqttClient.on_connect = on_connect
     mqttClient.on_message = on_message
     mqttClient.on_disconnect = on_disconnect
-    mqttClient.connect('broker.mqttdashboard.com', 1883)
+    mqttClient.connect('202.38.78.127', 1883)     
     mqttClient.subscribe("Q_table_collection_feedbackEtemox.json", 2)
     mqttClient.loop_start()
     dronePos, userPos, distribution, u = environment_setup(0)
@@ -475,7 +474,7 @@ def main(args):
                     torch.save(eval_network[drone_No].state_dict(), 'Network Parameters\\' + str(drone_No) + 'th_eval_network_parameters1')
                     target_network[drone_No].load_state_dict(torch.load('Network Parameters\\' + str(drone_No) + 'th_eval_network_parameters1'))
                     print('Drone' + str(drone_No) + ' updated')
-                    print ('Network Parameters\\' + str(count) + 'th_eval_network_parameters is successfully load to the target network')                    
+                    print ('Network Parameters\\' + str(count) + 'th_eval_network_parameters is successfully load to the target network')      
                 if isMessageReceived and 'Pause_Drone' in message:
                     message = str(message).replace("b","")
                     print('Message is received'+ message)
@@ -487,7 +486,7 @@ def main(args):
                         print(sys.exc_info())
                     if DroneDict['Pause_Drone'][str(drone_No)] == True:
                         flagForStop = True
-                    isMessageReceived = not isMessageReceived                    
+                    isMessageReceived = not isMessageReceived     
                 if isMessageReceived and 'lambda' in message:
                     message = str(message).replace("b","")
                     print('Message is received'+ message)
@@ -497,7 +496,7 @@ def main(args):
                     except:
                         print(repr(message))
                         print(sys.exc_info())
-                    Lambda=DroneDict.get('lamda')
+                    Lambda=DroneDict.get('lamda')          
                     print('The new lambda is: '+ str(Lambda))
                     isMessageReceived = not isMessageReceived
             total += reward_['total']
@@ -519,7 +518,7 @@ def main(args):
         np.save('episode_' + str(i) + 'Stop-pos.npy', dronePos)
         np.save('reward' + '_episode_' + str(i) + '.npy', counts)
         '''
-        mqttClient.loop_stop()
+    mqttClient.loop_stop()
 if __name__ == "__main__":
     torch.cuda.empty_cache()
     isMessageReceived = False
